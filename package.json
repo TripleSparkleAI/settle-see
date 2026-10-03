@@ -1,0 +1,21 @@
+{
+  "name": "settle-see",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SETTLE's seeing library: pictures that settle out of noise, lit in the SETTLE neon code",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./react": "./react/index.js"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

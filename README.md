@@ -851,7 +851,7 @@ These pages lean on it most:
 | `#/credits` | every credit, settled from the credits family with `fit` |
 | `#/settle-tour` | the digits a settling machine learns |
 | `#/sdmmemory` and `#/sdmexplore` | the memory pictures |
-| `#/six-layer-feedback` | the cortex and cerebellum layers (`CORTEX_LAYERS`, `CEREBELLUM_LAYERS`) |
+| `#/neocortex-feedback` | the cortex and cerebellum layers (`CORTEX_LAYERS`, `CEREBELLUM_LAYERS`) |
 | `#/paper` | the top panel, settling into the words lime and coconut |
 | `#/film` | the 40 Hz light on the film player |
 | `#/puzzles` | the shared ticker's state, so a solver stops while the ticker is held |

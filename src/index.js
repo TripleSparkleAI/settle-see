@@ -63,7 +63,7 @@ export {
 } from './fortycrackle.js';
 export { createFortyCrackle, scanParams, scanAt } from './fortyscan.js';
 export { createField } from './field.js';
-export { createRenderer, fillCells, fillMap, makeColours, lightAlpha, isClearBackground, RENDER_DEFAULTS } from './render.js';
+export { createRenderer, fillCells, fillMap, makeColours, lightAlpha, isClearBackground, RENDER_DEFAULTS, ITEM_LOOK_KEYS, withItemLook, resolveItemLook } from './render.js';
 export { createGlRenderer, glSupported } from './glrender.js';
 export { createGpuField } from './gpufield.js';
 export { createTrueTime, replayFrames, TRUE_TIME_DEFAULTS } from './truetime.js';

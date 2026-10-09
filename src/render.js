@@ -6,6 +6,9 @@
 //   plate                    - the canvas it draws into: (w * pitch) x (h * pitch) pixels, black where nothing is lit
 //   render(field)            - paint the field's current state into plate
 //   set(opts)                - change colour mode, neons, pitch, glow, clear without rebuilding
+// ITEM_LOOK_KEYS / resolveItemLook(item) / withItemLook(look, neonLook) - THE ITEM LOOK (lane HEROHYPER): an item's
+//                              own neonLook (an object, or a function answering one, read every frame) over a look;
+//                              off when look.itemLooks is false; every key present (null = the default)
 // fillMap(F, paint, o, colours, d, k) - the 'map' colour mode's fill: a palette index and a gain per light
 // lightAlpha(d)              - in place: each RGBA pixel's alpha becomes its brightest channel, its colour scaled up
 //                              to match, so the pixel composites (premultiplied) as the same light with no plate
@@ -37,6 +40,11 @@
 // - The pointer's trail (field.held) is added in ice, the key's colour for "held": the user is holding those lights.
 //   A clamped light (field.clamp) is drawn in ice outright: full when clamped yes, dim when clamped no.
 // - dim is the brightness of an unlit light (default 0.16); glow scales the bloom (0 turns it off).
+// - THE ITEM LOOK (lane HEROHYPER, 2026-10-10): in the 'meaning' mode opts.yes replaces rose as the lit colour (its
+//   flash too) and opts.coreMix sets how near white the lit core is (default 0.78). mount.js reads these, and heat,
+//   neon, off, glow and flashColour, from the current item's neonLook through withItemLook, so a page can light one
+//   item, or one stretch of a live item, in other neons. The per-frame fill is unchanged: the colours are made once,
+//   on set(), and only when the item's look changes.
 // - clear (opts.clear, set by mount when background is 'transparent'): the plate is cleared to transparent instead of
 //   filled black, and the cell and core images carry their light as alpha (lightAlpha), so an unlit light and the gap
 //   between dots have alpha 0 and a lit dot keeps its colour. 'lighter' then adds the layers in premultiplied space,
@@ -69,18 +77,40 @@ export function lightAlpha(d) {
   return d;
 }
 
+// THE ITEM LOOK (lane HEROHYPER): the keys an item's own neonLook may set, and the look a renderer draws an item in.
+// The item's look holds unless the caller turned item looks off (opts.itemLooks === false: a page's own colour choice,
+// a 40 Hz light, a colour shift). Every key is always present (null = the default), so a renderer's set() never keeps
+// the last item's colour for an item without one.
+export const ITEM_LOOK_KEYS = Object.freeze(['yes', 'heat', 'neon', 'off', 'coreMix', 'glow', 'flashColour']);
+// what an absent key falls back to after the look's own value: null is the renderer's default (rose, a 0.78 core, a
+// flash in the lit colour's tint)
+const ITEM_LOOK_BASE = { heat: RENDER_DEFAULTS.heat, neon: RENDER_DEFAULTS.neon, off: RENDER_DEFAULTS.off, glow: RENDER_DEFAULTS.glow };
+export function resolveItemLook(item) {
+  const nl = item && typeof item === 'object' ? item.neonLook : null;
+  return (typeof nl === 'function' ? nl() : nl) ?? null;
+}
+export function withItemLook(look, il) {
+  const v = look.itemLooks === false ? null : il;
+  const o = { ...look };
+  for (const k of ITEM_LOOK_KEYS) o[k] = v?.[k] ?? look[k] ?? ITEM_LOOK_BASE[k] ?? null;
+  return o;
+}
+
 // the colours a look uses, as [r, g, b] 0..255
 export function makeColours(o) {
   const on = neon(o.neon, o.seed);
+  // the meaning mode's lit colour: rose, or an item's own (opts.yes, THE ITEM LOOK); the core's whiteness likewise
+  const yes = o.yes ? neon(o.yes) : NEON.yes;
+  const coreMix = Number.isFinite(o.coreMix) ? o.coreMix : 0.78;
   return {
-    yes: rgb(o.color === 'meaning' ? NEON.yes : on),
+    yes: rgb(o.color === 'meaning' ? yes : on),
     heat: rgb(o.color === 'meaning' ? neon(o.heat) : on),
     off: rgb(o.color === 'single' ? on : neon(o.off)),
-    coreYes: tint(o.color === 'meaning' ? NEON.yes : on, 0.78),
+    coreYes: tint(o.color === 'meaning' ? yes : on, coreMix),
     coreHeat: tint(o.color === 'meaning' ? neon(o.heat) : on, 0.78),
     held: rgb(neon(o.heldColour ?? 'held')),
     echo: rgb(neon(o.echoColour ?? 'mem')),
-    flash: o.flashColour ? rgb(neon(o.flashColour)) : tint(o.color === 'meaning' ? NEON.yes : on, 0.82),
+    flash: o.flashColour ? rgb(neon(o.flashColour)) : tint(o.color === 'meaning' ? yes : on, 0.82),
     palette: (o.palette ?? []).map((x) => rgb(typeof x === 'string' ? x : x.hex)),
     paletteCore: (o.palette ?? []).map((x) => tint(typeof x === 'string' ? x : x.hex, 0.78)),
   };

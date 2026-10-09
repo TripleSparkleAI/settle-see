@@ -63,7 +63,9 @@
 //   and opts.paint, { hue: Uint8Array, gain: Float32Array } or a function (field, timeSec) => that, read at every
 //   draw (render.js fillMap). The 2D renderer draws it; the WebGL renderer ignores paint. set({ paint }) swaps it.
 // - opts.color 'meaning' | 'single' | 'duo', opts.neon (a key, a hex, or 'random'), opts.off, opts.dim, opts.glow:
-//   see render.js. opts.background (default '#000') is the plate's colour; 'transparent' (lane LOGORAW, 2026-10-02)
+//   see render.js. THE ITEM LOOK (lane HEROHYPER): an item may carry neonLook, an object of render.js ITEM_LOOK_KEYS
+//   (yes, heat, neon, off, coreMix, glow, flashColour) or a function answering one (read every frame, so a live item
+//   may change it); it is drawn in that look from its first frame. opts.itemLooks false turns item looks off. opts.background (default '#000') is the plate's colour; 'transparent' (lane LOGORAW, 2026-10-02)
 //   draws raw lights with no plate: an unlit light and the gap between dots are see-through, a lit dot keeps its
 //   colour. A 'gl' settle reads it at mount (it picks an alpha, premultiplied context); a 2D one follows set(). opts.seed seeds the noise and a random neon.
 // - opts.schedule: see schedule.js ('cycle' default; 'cool'; 'fixed'; a number; a function). opts.fps (24) is
@@ -189,7 +191,7 @@
 // </claudes_code_comments>
 
 import { createField } from './field.js';
-import { createRenderer, isClearBackground } from './render.js';
+import { createRenderer, isClearBackground, withItemLook, resolveItemLook } from './render.js';
 import { createGlRenderer } from './glrender.js';
 import { makeSchedule } from './schedule.js';
 import { toTarget, loadTarget, describe, pendingShape } from './target.js';
@@ -491,7 +493,10 @@ export function settle(canvas, options = {}) {
   const tracesOn = () => !!(o.traces || o.echoes);
   const makeTraces = () => { TR = tracesOn() ? createTraces(F, typeof o.traces === 'object' ? o.traces : {}) : null; };
 
-  const look = () => ({ color: o.color, neon: o.neon, off: o.off, dim: o.dim, glow: o.glow, core: o.core, seed: o.seed, echoColour: o.echoColour, heldColour: o.heldColour, flashColour: o.flashColour, palette: o.palette, level: o.level, clear: isClearBackground(o.background) });
+  // THE ITEM LOOK (lane HEROHYPER): the neonLook of the item showing now (render.js withItemLook; opts.itemLooks false
+  // turns it off, so a caller's own colours win)
+  let itemLook = null;
+  const look = () => withItemLook({ color: o.color, neon: o.neon, off: o.off, heat: o.heat, dim: o.dim, glow: o.glow, core: o.core, seed: o.seed, echoColour: o.echoColour, heldColour: o.heldColour, flashColour: o.flashColour, palette: o.palette, level: o.level, clear: isClearBackground(o.background), yes: o.yes, coreMix: o.coreMix, itemLooks: o.itemLooks }, itemLook);
   // THE PAINT (lane LOGOHOVER): the 'map' colour mode's per-light colours through settle(): opts.paint is
   // { hue: Uint8Array, gain: Float32Array } or a function (field, timeSec) => that, read at every draw
   const paintOf = (now) => (typeof o.paint === 'function' ? o.paint(F, now) : o.paint ?? null);
@@ -677,6 +682,10 @@ export function settle(canvas, options = {}) {
       if (o.still) snap();
     }
     const cur = list[index % list.length];
+    // THE ITEM LOOK: the item's neonLook (a function is read every frame, so a live item may change it mid-slot); a
+    // change re-makes the colours once, an unchanged look costs one comparison
+    const il = resolveItemLook(cur);
+    if (il !== itemLook) { itemLook = il; R?.set(look()); }
     let Tuse = T;
     if (isFilm(cur)) {
       const n = filmLength(cur);
@@ -810,6 +819,8 @@ export function settle(canvas, options = {}) {
   LIVE.add(live);
   const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const step = (now) => {
+    // THE ITEM LOOK: a function look that has changed wakes a resting picture, so the new colours are drawn
+    if (resting() && quiet > (o.restAfter ?? 24) && index >= 0 && resolveItemLook(items()[index % items().length]) !== itemLook) quiet = 0;
     if (resting() && quiet > (o.restAfter ?? 24)) {
       // a resting picture keeps its physics still; under the 40 Hz light only its crackle moves (draw-only)
       if (fcOpts && F && (fortyLit() || F.flashing)) {

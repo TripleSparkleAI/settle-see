@@ -266,6 +266,14 @@ glows and a flickering one does not.
 `(field, timeSec) => that`, read at every draw. `level` scales every gain. The SETTLE site's header mark uses it for
 its colour maps. The 2D renderer draws it; the WebGL renderer ignores `paint`.
 
+An item can carry its own look. `neonLook` on an item is an object with any of `yes` (the lit colour in the
+`'meaning'` mode, rose by default), `heat`, `neon`, `off`, `coreMix` (how near white a lit light's core is, 0.78 by
+default), `glow` and `flashColour`, or a function that answers one. The settle draws the item in that look from its
+first frame and goes back to its own colours for the next item. A function is read every frame, so a live item can
+change its look in the middle of its slot; the colours are remade only when the answer changes. `itemLooks: false`
+turns item looks off, so a page's own colour choice wins. The SETTLE site's hero uses this for its HYPER PINK and
+HYPER BLUE items.
+
 `background` is the plate's colour (default `'#000'`). `background: 'transparent'` draws raw lights with no plate:
 an unlit light and the gap between dots have alpha 0, and a lit dot keeps its colour, so the picture sits over
 whatever is behind the canvas (the site's header logo uses it with `glow: 0` and `dim: 0`). Each light's alpha is
@@ -815,7 +823,7 @@ h.setMode('still');    // the low CPU mode: settled once out of sight, drawn onc
 
 ## Tests
 
-`npm test` runs 298 tests in 29 files under `tests/` with `node --test`, using stand-in canvases (node has none).
+`npm test` runs 305 tests in 30 files under `tests/` with `node --test`, using stand-in canvases (node has none).
 Each file opens with a comment saying what it proves. In brief:
 
 | file | what it checks |
@@ -825,6 +833,7 @@ Each file opens with a comment saying what it proves. In brief:
 | `shapes.test.mjs`, `brain.test.mjs`, `eightball.test.mjs` | every credits shape settles into itself at every size the site draws it (correlation above 0.85) while a shuffled-target control stays below 0.25; each brain view settles and its control does not; the eight ball and its word wrap |
 | `creditlazy.test.mjs` | the credits family loads on demand: the index reaches its names and never its drawings, a pending shape is described by its note and refused by `toTarget` by name, `settle()` starts unlit and takes the drawing when it arrives, and every loaded drawing matches the eager module |
 | `render.test.mjs`, `seennow.test.mjs` | the colour fill: the fast and full loops give the same bytes; a settle reads the last entry of its visibility batch, so a canvas shown inside one frame runs |
+| `itemlook.test.mjs` | THE ITEM LOOK: an item's `neonLook` lights it in its own colours from its first frame and the next plain item is rose again; a plain item draws byte for byte as before; `itemLooks: false` lets the caller's colours win; a function look switches mid-item, even at rest |
 | `ticker.test.mjs`, `truetime.test.mjs`, `morph.test.mjs`, `morphowed.test.mjs`, `film.test.mjs`, `live.test.mjs` | the halt rule; TRUE TIME on fast and slow fronts with a falling-behind control; the morph movie; THE OWED LIGHTS (a morph from the lit picture, no rest while a changed light disagrees); the film format and the TRACES round trip; live items |
 | `gamma.test.mjs`, `fortyhz.test.mjs`, `masterbeat.test.mjs` | the 40 Hz wave and THE RATE RULE; the one page gate; the master grid, and the light on fake 60, 90, 120 and 144 Hz displays and a jittery 60, with negative controls |
 | `global.test.mjs`, `radialpulse.test.mjs`, `radialeffects.test.mjs`, `keyeffects.test.mjs`, `gentlerings.test.mjs` | the registry and the ripple; the bus's delay, falloff, direction, order and costs; the effect family and THE WEATHER; the fifty key members; the gentle rings |

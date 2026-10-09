@@ -27,6 +27,15 @@
 //                                             every settling picture flickers to (Escape and every off button end it)
 // ripple / registerSettle / onRipple / globalSettle / createGlobalSettle / clickPulse - global.js: THE GLOBAL SETTLE,
 //                                             the page's registry of every settle, a face over the radial pulse bus
+// RADIAL_EFFECTS / KEY_EFFECTS / effectOf / effectHolds - radialeffects.js: THE RADIAL EFFECTS, the bus's named family
+//                                             of wave styles, and THE KEY SUIT of fifty gentle members (lane HEROKEYS)
+// WEATHER_NEUTRAL / weatherOf             - weather.js: THE WEATHER option, a page's per-frame modulation of the knobs
+// CRACKLE_LIMITS / crackleOf / createRim / crackleFrame - crackle.js: THE EDGE CRACKLE, the weather's overbright
+//                                             flares along a target's rim (lane CLEARTEXT)
+// FORTY_CRACKLE / fortyCrackleOf / createFortyCrackle / fortyLitCycle / FORTY_SCAN_PATTERNS / scanParams / scanAt
+//                                           - fortycrackle.js + fortyscan.js: THE 40 Hz CRACKLE, TV scanlines that
+//                                             brighten the lit lights on the 40 Hz light's lit phases (lanes
+//                                             FORTYCRACKLE, FORTYSCAN; fortyscan.js, the generator, loads on demand)
 // radialPulse / createRadialPulse / registerRadial / emitPulse / onPulse - radialpulse.js: THE RADIAL PULSE BUS, one
 //                                             bus for every radial event and one consumer interface ('settle:pulse')
 // DRAG / createDragGesture / rectFrom / dragFadeMs / placeChildren / stepChildren - dragbox.js: THE DRAG BOX, the
@@ -38,10 +47,18 @@
 //   for a picture target: lean toward the target, pull to four neighbours, a Gibbs sweep per step.
 // </claudes_code_comments>
 
-export { settle, changedOptions, settlePerfs, setQuality, getQuality, GLOBAL_KICK_DECAY } from './mount.js';
+export { settle, changedOptions, settlePerfs, setQuality, getQuality, GLOBAL_KICK_DECAY, OWED_MAX_FRAMES, ringsFor, echoRings, radialAnswer, frontCells, fortyScanReady, fortyScanState } from './mount.js';
 export { DRAG, createDragGesture, rectFrom, dragFadeMs, placeChildren, stepChildren, capList } from './dragbox.js';
 export { GLOBAL_DEFAULTS, createGlobalSettle, globalSettle, registerSettle, ripple, onRipple, globalStats, clickPulse, nearestPoint, farthestCorner } from './global.js';
-export { RADIAL_DEFAULTS, PULSE_EVENT, createRadialPulse, radialPulse, registerRadial, emitPulse, onPulse, radialStats, arrivalMs, falloff, onScreen } from './radialpulse.js';
+export { RADIAL_DEFAULTS, PULSE_EVENT, admits, createRadialPulse, radialPulse, registerRadial, emitPulse, onPulse, radialStats, arrivalMs, falloff, onScreen } from './radialpulse.js';
+// THE RADIAL EFFECTS (lane SOUNDSHAKE): the named family of wave styles on THE RADIAL PULSE BUS; THE WEATHER option
+export { RADIAL_EFFECTS, EFFECT_KEYS, SOUND_EFFECTS, KEY_EFFECTS, KEY_EFFECT_KEYS, GENTLE, isGentle, effectOf, ringCells, onSpoke, effectHolds } from './radialeffects.js';
+export { WEATHER_NEUTRAL, WEATHER_LIMITS, weatherOf } from './weather.js';
+export { CRACKLE_LIMITS, crackleOf, createRim, crackleRng, crackleFrame } from './crackle.js';
+export {
+  FORTY_CRACKLE, FORTY_CRACKLE_LIMITS, FORTY_SCAN_PATTERNS, FORTY_SCAN_COVER, fortyCrackleOf, fortyLitCycle,
+} from './fortycrackle.js';
+export { createFortyCrackle, scanParams, scanAt } from './fortyscan.js';
 export { createField } from './field.js';
 export { createRenderer, fillCells, fillMap, makeColours, lightAlpha, isClearBackground, RENDER_DEFAULTS } from './render.js';
 export { createGlRenderer, glSupported } from './glrender.js';
@@ -54,7 +71,7 @@ export { toTarget, loadTarget, describe, makeCanvas, FONT as WORD_FONT } from '.
 export { defineShape, defineBits, getShape, shapeNames, SHAPES, wrapLines } from './shapes.js';
 export { Paint, seeded, scatter, curve } from './paint.js';
 export { KANERVA, CREDIT_SHAPES, NOTES as CREDIT_NOTES } from './creditshapes.js';
-export { brainScene, rideScene, clampRide, rideTiers, RIDE_START, RIDE_LIMITS, RIDE_UP, RIDE_FAR, RIDE_FAR_END, BRAIN_VIEWS, CORTEX_LAYERS, CEREBELLUM_LAYERS } from './brainshapes.js';
+export { brainScene, rideScene, clampRide, rideTiers, RIDE_START, RIDE_LIMITS, RIDE_UP, RIDE_FAR, RIDE_FAR_END, BRAIN_VIEWS, CORTEX_LAYERS, CEREBELLUM_LAYERS, BAND_SPLIT } from './brainshapes.js';
 export { BURSTS, burstDeckOrder, createBurstDeck, createBurstPlayer, burstEnv } from './bursts.js';
 export { correlation, shuffled } from './measure.js';
 export { NEONS, NEON, GROUND, RANDOM_KEYS, neon, rgb, rgba, mixRgb, tint, hsv, hexOfHsv, neonRange } from './palette.js';

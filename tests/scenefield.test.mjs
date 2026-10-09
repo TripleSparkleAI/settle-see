@@ -209,3 +209,116 @@ test('the bloom mips are drawn with copy, so a clear plate cannot pile faint pix
   assert.equal(mips.length, 4, 'two mips a frame, two frames');
   for (const m of mips) assert.equal(m.op, 'copy');
 });
+
+// lane BG3D: the line rasteriser walks a span instead of the bounding box; it must draw exactly what the box drew
+const coverageRef = (d, half, cell) => { const c = (half - d) / cell + 0.5; return c <= 0 ? 0 : c >= 1 ? 1 : c; };
+function boxLines(prims, { w, h, cell }) {
+  const best = new Float32Array(w * h);
+  const hue = new Uint8Array(w * h);
+  for (const p of prims) {
+    const g = p.gain ?? 1;
+    const half = Math.max(p.width ?? 1, cell * 0.9) / 2;
+    const dx = p.x2 - p.x1;
+    const dy = p.y2 - p.y1;
+    const L2 = dx * dx + dy * dy || 1;
+    const pad = half + cell;
+    const cx0 = Math.max(0, Math.floor((Math.min(p.x1, p.x2) - pad) / cell));
+    const cy0 = Math.max(0, Math.floor((Math.min(p.y1, p.y2) - pad) / cell));
+    const cx1 = Math.min(w - 1, Math.floor((Math.max(p.x1, p.x2) + pad) / cell));
+    const cy1 = Math.min(h - 1, Math.floor((Math.max(p.y1, p.y2) + pad) / cell));
+    for (let y = cy0; y <= cy1; y++) for (let x = cx0; x <= cx1; x++) {
+      const cx = (x + 0.5) * cell;
+      const cy = (y + 0.5) * cell;
+      let t = ((cx - p.x1) * dx + (cy - p.y1) * dy) / L2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const a = g * coverageRef(Math.hypot(cx - (p.x1 + t * dx), cy - (p.y1 + t * dy)), half, cell);
+      if (a > best[y * w + x]) { best[y * w + x] = a; hue[y * w + x] = p.hue2 == null ? p.hue : Math.round(p.hue + (p.hue2 - p.hue) * t); }
+    }
+  }
+  return { best, hue };
+}
+
+test('rasterScene: the span walk lights exactly the lights the bounding box lit, on 600 random lines of every slope', () => {
+  let a = 12345;
+  const rnd = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+  const geom = { w: 90, h: 70, cell: 5 };
+  const prims = [];
+  for (let k = 0; k < 600; k++) {
+    const x1 = -40 + rnd() * 530;
+    const y1 = -40 + rnd() * 430;
+    const len = rnd() < 0.3 ? rnd() * 3 : 4 + rnd() * 160;
+    const ang = rnd() * Math.PI * 2;
+    prims.push({ k: 'line', x1, y1, x2: x1 + len * Math.cos(ang), y2: y1 + len * Math.sin(ang), width: rnd() * 4, hue: k % 9, hue2: rnd() < 0.5 ? (k + 3) % 9 : undefined, gain: 0.2 + 0.8 * rnd() });
+  }
+  // the axis-aligned and the degenerate cases, which divide by a zero slope
+  prims.push({ k: 'line', x1: 50, y1: 50, x2: 50, y2: 200, width: 1, hue: 1, gain: 1 });
+  prims.push({ k: 'line', x1: 60, y1: 300, x2: 400, y2: 300, width: 1, hue: 2, gain: 1 });
+  prims.push({ k: 'line', x1: 222, y1: 111, x2: 222, y2: 111, width: 1, hue: 3, gain: 1 });
+  for (const one of [prims, ...prims.slice(-3).map((p) => [p])]) {
+    const got = rasterScene(one, geom, { litAt: 1e-9 });
+    const ref = boxLines(one, geom);
+    let diff = 0;
+    for (let i = 0; i < ref.best.length; i++) {
+      const lit = ref.best[i] > 0;
+      if (lit !== got.bits[i] > 0 || (lit && (Math.abs(ref.best[i] - got.gain[i]) > 1e-6 || ref.hue[i] !== got.hue[i]))) diff++;
+    }
+    assert.equal(diff, 0, `${diff} lights differ from the bounding box walk`);
+  }
+  // negative control: the comparison can fail - the same long line agrees, the line moved one light down does not
+  const one = rasterScene([{ k: 'line', x1: 10, y1: 10, x2: 300, y2: 200, width: 1, hue: 1, gain: 1 }], geom, { litAt: 1e-9 });
+  const ref = boxLines([{ k: 'line', x1: 10, y1: 10, x2: 300, y2: 200, width: 1, hue: 1, gain: 1 }], geom);
+  const shifted = rasterScene([{ k: 'line', x1: 10, y1: 15, x2: 300, y2: 205, width: 1, hue: 1, gain: 1 }], geom, { litAt: 1e-9 });
+  let same = 0;
+  let moved = 0;
+  for (let i = 0; i < ref.best.length; i++) { if ((ref.best[i] > 0) === (one.bits[i] > 0)) same++; if ((ref.best[i] > 0) !== (shifted.bits[i] > 0)) moved++; }
+  assert.equal(same, ref.best.length);
+  assert.ok(moved > 20, `a line moved one light differs in ${moved} lights`);
+});
+
+test('the scene\'s own pace: cadence(t) sets how often it is re-read, kickT(t) how hot a changed target re-settles', () => {
+  let now = 0;
+  let reads = 0;
+  let fast = false;
+  const moving = (st) => { reads++; return [{ k: 'disc', x: 20 + (Math.floor(st.t / 10) % 50), y: 35, r: 10, hue: 1, gain: 1 }]; };
+  moving.cadence = () => (fast ? 20 : 400);
+  moving.kickT = () => (fast ? 0.9 : 0.5);
+  const h = createSceneSettle(new FakeCanvas(), { scene: moving, palette: PAL, cell: 7, now: () => now, beat: false, fps: 1000, fortyHz: false });
+  reads = 0;
+  for (let k = 0; k < 100; k++) tick((now += 20));
+  const slow = reads;
+  fast = true;
+  reads = 0;
+  for (let k = 0; k < 100; k++) tick((now += 20));
+  assert.ok(slow <= 6 && slow >= 4, `slow: ${slow} reads in 2 s at 400 ms`);
+  assert.ok(reads >= 90, `fast: ${reads} reads in 2 s at 20 ms`);
+  assert.ok(h.stats().T > 0.8, `a fast read re-settles hot: T ${h.stats().T}`);
+  // without the hooks the engine keeps opts.sceneMs (negative control)
+  let plain = 0;
+  const still = () => { plain++; return [{ k: 'disc', x: 35, y: 35, r: 10, hue: 1, gain: 1 }]; };
+  const g = createSceneSettle(new FakeCanvas(), { scene: still, palette: PAL, cell: 7, now: () => now, beat: false, fps: 1000, fortyHz: false, sceneMs: 500 });
+  plain = 0;
+  for (let k = 0; k < 100; k++) tick((now += 20));
+  assert.ok(plain <= 5, `${plain} reads in 2 s at the default 500 ms`);
+  h.destroy();
+  g.destroy();
+});
+
+test('rasterScene: a thin line is one light per step, 8-connected, clipped to the grid, at its gain (lane BG3D2)', () => {
+  const geom = { w: 40, h: 30, cell: 5 };
+  const lit = (prims) => { const r = rasterScene(prims, geom, { litAt: 0.1 }); const out = []; r.bits.forEach((b, i) => b > 0 && out.push([i % geom.w, Math.floor(i / geom.w), r.gain[i], r.hue[i]])); return out; };
+  // a diagonal: one light per column, each step at most one light away (8-connected), no gaps
+  const d = lit([{ k: 'line', thin: true, x1: 2, y1: 2, x2: 150, y2: 110, hue: 2, gain: 0.6 }]);
+  const cols = new Set(d.map(([x]) => x));
+  assert.equal(cols.size, d.length, 'one light per column along the longer axis');
+  d.sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < d.length; i++) assert.ok(Math.abs(d[i][0] - d[i - 1][0]) <= 1 && Math.abs(d[i][1] - d[i - 1][1]) <= 1, 'connected');
+  assert.ok(d.every(([, , g, h]) => Math.abs(g - 0.6) < 1e-6 && h === 2), 'at its gain and hue');
+  // a line running far off the grid is clipped: it costs the grid, never its length, and lights only what is on it
+  const far = lit([{ k: 'line', thin: true, x1: -50000, y1: 72, x2: 50000, y2: 72, hue: 1, gain: 1 }]);
+  assert.equal(far.length, geom.w);
+  assert.equal(lit([{ k: 'line', thin: true, x1: -500, y1: -500, x2: -10, y2: -20, hue: 1, gain: 1 }]).length, 0, 'wholly off the grid: nothing');
+  // a gradient thin line walks the palette along its length
+  const g = lit([{ k: 'line', thin: true, x1: 0, y1: 50, x2: 199, y2: 50, hue: 0, hue2: 8, gain: 1 }]).sort((a, b) => a[0] - b[0]);
+  assert.equal(g[0][3], 0);
+  assert.equal(g[g.length - 1][3], 8);
+});

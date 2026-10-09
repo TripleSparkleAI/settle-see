@@ -13,7 +13,7 @@
 //   drawn as a tesseract; named tesseract because 'hypercube' is the physics family's canvas drawing).
 // - The other credits' characters: isingDomains, tanhRule, boltzmannBars, metropolisHop, restoredDisc, annealValley,
 //   hopfieldNet, boltzmannMachine, pbitCoin, tapField, tannerGraph, softmaxRead, markovBlanket, noisyWell, pbitChip,
-//   openBook, vinyl, railsAerobics, dots.
+//   openBook, vinyl, railsAerobics, dots, musicMachine (THE DJ's credit, lane DJCREDIT).
 // - tests/shapes.test.mjs settles every one at the sizes settle-site draws it: correlation with the shape above 0.85
 //   after one cool-down, and below 0.25 when the leans come from a shuffled copy.
 // - Moved from settle-site's src/engine/creditshapes.js with the drawings unchanged.
@@ -404,6 +404,24 @@ const CREDITS = {
     for (let k = 0; k < n; k++) p.disc(0.08 + r() * 0.84, 0.1 + r() * 0.8, 0.05 + r() * 0.07);
     return p.t;
   },
+  // THE DJ's credit (lane DJCREDIT): a small music-making machine, a speaker in its face and a crank on its top, with
+  // three notes leaving it, rising to the right.
+  musicMachine(w, h) {
+    const p = new Paint(w, h);
+    p.poly([[0.08, 0.36], [0.44, 0.36], [0.44, 0.82], [0.08, 0.82], [0.08, 0.36]], 0.05);
+    p.ring(0.26, 0.59, 0.15, 0.045);
+    p.disc(0.26, 0.59, 0.035);
+    p.seg(0.13, 0.82, 0.13, 0.95, 0.045);
+    p.seg(0.39, 0.82, 0.39, 0.95, 0.045);
+    p.seg(0.26, 0.36, 0.26, 0.2, 0.04);
+    p.disc(0.26, 0.16, 0.04);
+    for (const [u, v] of [[0.56, 0.72], [0.72, 0.56], [0.88, 0.4]]) {
+      p.disc(u, v, 0.075);
+      p.seg(u + 0.035, v, u + 0.035, v - 0.36, 0.045);
+      p.seg(u + 0.035, v - 0.36, u + 0.09, v - 0.25, 0.04);
+    }
+    return p.t;
+  },
 };
 
 export const NOTES = {
@@ -432,6 +450,7 @@ export const NOTES = {
   vinyl: 'a record, its grooves and its label',
   railsAerobics: 'an aerobics figure on a pair of rails',
   dots: 'polka dots',
+  musicMachine: 'a small music-making machine with notes leaving it',
 };
 
 export const KANERVA = ['hardLocations', 'hammingBall', 'counters', 'vote', 'criticalDistance', 'tesseract'];

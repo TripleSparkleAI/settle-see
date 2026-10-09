@@ -37,7 +37,7 @@
 // rooms(boxes)                      - THE ONE ROOM (lane MULTIRECT): a room number per box; boxes that overlap, directly
 //                                     or through a chain of overlaps, share one number
 // nudgeKids(kids, at, opts)         - THE NUDGE: each child's velocity kicked away from `at` by strength exp(-d / reach)
-// createNoiseGate(opts)             - THE NOISE GATE: a token bucket; .take(nowMs) is true while a noise may sound
+// createNoiseGate(opts)             - THE NOISE GATE: a token bucket; .take(nowMs) is true while a drop may sound
 //
 // ** Technical Review **
 // - THE TWO GESTURES. A mouse or a pen: the press does nothing yet; moving `threshold` px (6) from it starts a drag;
@@ -72,7 +72,9 @@
 //   kicks the twinkles already alive away from its centre (nudgeKids), strongest near it. (3) THE CROSS PULL: escaped
 //   twinkles of different boxes bend toward each other (stepEscape's others), so their rings cross more; every ring
 //   of every box is summed in ONE interference scratch, so crossings across boxes brighten or cancel. THE NOISE GATE
-//   (createNoiseGate): a burst of drags plays at most noiseBurst noises, then noisePerSecond; the rest pulse silent.
+//   (createNoiseGate): a burst of drags sounds at most noiseBurst DROPS, then noisePerSecond drops a second; the rest
+//   pulse silent. A drop is one token, all four of its noises or none (lane HERODRAGFIX: the gate had counted the four
+//   noises of one drop as four, so a second drop inside a second lost two of its four and a third lost all four).
 // </claudes_code_comments>
 
 export const DRAG = Object.freeze({
@@ -84,8 +86,8 @@ export const DRAG = Object.freeze({
   nudge: 0.9, // lights a frame: the kick a new box gives the twinkles of the boxes already alive, at its centre
   nudgeReach: 0.25, // the kick falls as exp(-d / reach), reach a share of the picture's shorter side
   crossPull: 0.06, // escaped twinkles of different boxes bend toward each other, at most this share of the speed a frame
-  noiseBurst: 6, // THE NOISE GATE: at most this many drag noises at once ...
-  noisePerSecond: 3, // ... refilled at this rate; a birth over the limit still pulses the page, silent
+  noiseBurst: 6, // THE NOISE GATE: at most this many DROPS sound at once (a drop is one token, its four noises) ...
+  noisePerSecond: 3, // ... refilled at this many drops a second; a drop over the limit still pulses the page, silent
   lifeS: 5.6, // seconds the children live: twice the first version's 2.8 (navigator 2026-10-02)
   lifeJitter: 0.1, // a drag's life is lifeS x (1 - jitter .. 1 + jitter)
   insideShare: 0.2, // the share of the life inside the box; the box fades over exactly this

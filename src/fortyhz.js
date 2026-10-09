@@ -19,6 +19,8 @@
 //   .lights()                  - the names of every drawing on the clock now
 //   .elements()                - [element, name] for every drawing on the clock (the radial pulse bus reads it)
 //   .phase                     - the state drawn now: true lit, false dark, null when off
+//   .litCycle                  - how many lit phases have begun since the light went on (0 when off); THE 40 Hz
+//                                CRACKLE (fortycrackle.js) advances its scanlines once per lit phase by it
 //   .info                      - { hz, asked, refresh, nearest, refused, running, shownHz, darkShare, lockMs }
 //   .step(now)                 - one display frame (the gate's own loop calls it; tests drive it directly)
 //   .restore()                 - turn on again when this tab's session says it was on (and motion is allowed)
@@ -95,6 +97,7 @@ export function createFortyHz({
   let flips = 0;
   let darkT = 0;
   let lock = 0;
+  let litCycle = 0;
   const root = () => doc?.documentElement ?? null;
   const org = () => (Number.isFinite(origin) ? origin : masterBeat().origin);
   const state = () => ({ on, info: { ...info }, lights: [...lights.values()] });
@@ -171,6 +174,9 @@ export function createFortyHz({
     get phase() {
       return phase;
     },
+    get litCycle() {
+      return on ? litCycle : 0;
+    },
     get info() {
       return { ...info };
     },
@@ -190,6 +196,7 @@ export function createFortyHz({
         try { storage?.setItem(FORTY_HZ_SESSION, '1'); } catch { /* storage may be blocked */ }
         injectStyle();
         phase = true;
+        litCycle = 1;
         writeRoot('lit');
         doc?.addEventListener?.('keydown', onKey);
         doc?.addEventListener?.('visibilitychange', onVisible);
@@ -202,6 +209,7 @@ export function createFortyHz({
       stopLoop();
       info.running = false;
       phase = null;
+      litCycle = 0;
       writeRoot(null);
       tellPhase(null);
       try { storage?.removeItem(FORTY_HZ_SESSION); } catch { /* ignore */ }
@@ -247,7 +255,10 @@ export function createFortyHz({
       if (tPrev && phase === false) darkT += (now - tPrev) / 1000;
       tPrev = now;
       if (bright !== phase) {
-        if (bright && phase === false) flips++;
+        if (bright && phase === false) {
+          flips++;
+          litCycle++;
+        }
         phase = bright;
         writeRoot(bright ? 'lit' : 'dark');
         tellPhase(bright);

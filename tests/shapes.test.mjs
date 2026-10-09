@@ -24,8 +24,8 @@ const drawn = [
   ...credits.filter((n) => !KANERVA.includes(n)).map((name) => [name, ...CARD]),
 ];
 
-test('the credits family: 25 shapes, Kanerva\'s six first among them, each with a note', () => {
-  assert.equal(credits.length, 25);
+test('the credits family: 26 shapes, Kanerva\'s six first among them, each with a note', () => {
+  assert.equal(credits.length, 26);
   for (const k of KANERVA) assert.ok(credits.includes(k), k);
   for (const n of credits) assert.ok(getShape(n).note.length > 5, `${n} has no note`);
   assert.ok(shapeNames('physics').includes('hypercube') && !credits.includes('hypercube'), 'the physics hypercube is a different shape');

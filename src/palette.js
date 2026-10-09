@@ -14,7 +14,7 @@
 //                         near-white ones last; [{ hex, key, source }] (lane SETTLEBG)
 //
 // ** Technical Review **
-// - The values are the site's (sites/settle-site/src/neon.js, fixed 2026-10-01); the site's tests check the two lists
+// - The values are the site's (SETTLE/settle-site/src/neon.js, fixed 2026-10-01); the site's tests check the two lists
 //   agree. The base look is two colours: a dark grey ground and one prime neon, rose.
 // - A random pick is seeded, so "neon: 'random'" with the same seed gives the same colour on every load.
 // - THE NEON RANGE (lane SETTLEBG, 2026-10-02) is the full-colour palette of the page backgrounds. It types no new

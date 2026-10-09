@@ -19,7 +19,11 @@
 //                                 outward and the temperature kicks; .pulseEnd(id) lets a wave go
 // pulsePrims(prims, waves, o)   - pure: the shapes displaced radially by the waves crossing them (pulsePush px at
 //                                 full gradient, a gain bump on the front)
-//   .setScene(fn)               - a new scene function (a page change); the field re-settles into it
+//   .setScene(fn)               - a new scene function; the field re-settles into it
+// scene.cadence(t) / scene.kickT(t) - optional, on the scene function: how often (ms) the engine re-reads it at
+//                                 master time t (default opts.sceneMs) and the temperature a changed target re-settles
+//                                 at (default opts.kickT); a moving 3D scene asks for every frame while its camera
+//                                 swoops and a slower, gentler read while it drifts (lane BG3D)
 //   .setMode('live' | 'still')  - live: settles every frame on the shared ticker; still: one pre-settled picture,
 //                                 drawn once, with no ticker entry, no frame work at all
 //   .resize()                   - re-read the canvas size (the page calls it on a window resize)
@@ -36,7 +40,8 @@
 // - RASTERISING is plain JavaScript (no canvas), so it runs the same in node as in a browser and the tests check it.
 //   Each light is a cell of opts.cell CSS pixels; its alpha from a shape is gain x coverage; the brightest shape over
 //   a light gives it its hue and gain. A light is in the target (+1) when that alpha reaches litAt (0.2). A line is at
-//   least 0.9 of a light wide, so a hairline still draws as a row of lights. opts.ground(x, y) gives the empty cells
+//   least 0.9 of a light wide, so a hairline still draws as a row of lights; a line with thin: true is exactly one light
+//   wide (one light per step along its longer axis, clipped to the grid), at its gain (lane BG3D2). opts.ground(x, y) gives the empty cells
 //   their colour (a faint dust), so the noise of a hot field shows across the whole picture and settles away.
 // - THE PHYSICS is settle-see's field (field.js): every light a p-bit leaning toward the target and pulled by its
 //   four neighbours, one exact checkerboard Gibbs sweep a frame. The temperature starts hot and cools to cold in about
@@ -44,6 +49,10 @@
 //   kickDecay a frame, so the new picture grows in through the field rather than appearing.
 // - THE COLOUR is the renderer's 'map' mode (render.js): each light's own palette colour times its gain. opts.level
 //   caps the whole picture's brightness, so a page can keep its text readable.
+// - THE SCENE'S OWN PACE (lane BG3D): a scene function may carry cadence(t) and kickT(t). The engine reads them at
+//   each step, so a scene that moves (the background's 3D camera) can ask to be re-read every frame through a fast
+//   move and re-settle warm, and every few hundred ms through a slow drift and re-settle gently. Without them the
+//   scene is re-read every opts.sceneMs and a change re-settles at opts.kickT, as before.
 // - REST: once the field is cold, the kick has died and the target has not changed for restAfter frames, the frame
 //   function returns at once (no sweep, no draw) until the next new target. The scene is still re-read every sceneMs
 //   (its own motion) and after a pointer move (at most every pointerMs); an unchanged target costs one comparison.
@@ -192,20 +201,72 @@ export function rasterScene(prims, geom, opts = {}) {
         }
         if (a > 0) put(i, a, p.hue);
       });
+    } else if (p.k === 'line' && p.thin) {
+      // a thin line (lane BG3D2): exactly one light per step along its longer axis, clipped to the grid first, at
+      // the line's gain (no coverage falloff), so a long line costs its length in lights and draws one light wide
+      const W = w * cell, H = h * cell;
+      let x1 = p.x1, y1 = p.y1, x2 = p.x2, y2 = p.y2;
+      let t0 = 0, t1 = 1;
+      const ddx = x2 - x1, ddy = y2 - y1;
+      const clip = (pp, q) => {
+        if (pp === 0) return q >= 0;
+        const r = q / pp;
+        if (pp < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+        return true;
+      };
+      if (!(clip(-ddx, x1) && clip(ddx, W - 1e-6 - x1) && clip(-ddy, y1) && clip(ddy, H - 1e-6 - y1))) continue;
+      x2 = x1 + ddx * t1; y2 = y1 + ddy * t1; x1 += ddx * t0; y1 += ddy * t0;
+      const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / cell));
+      const hue2 = p.hue2;
+      for (let k = 0; k <= n; k++) {
+        const u = k / n;
+        const cx = Math.floor((x1 + (x2 - x1) * u) / cell);
+        const cy = Math.floor((y1 + (y2 - y1) * u) / cell);
+        if (cx < 0 || cy < 0 || cx >= w || cy >= h) continue;
+        const tt = t0 + (t1 - t0) * u;
+        put(cy * w + cx, g, hue2 == null ? p.hue : Math.round(p.hue + (hue2 - p.hue) * tt));
+      }
     } else if (p.k === 'line') {
+      // walk the line's span row by row (a steep line) or column by column (a flat one): only the lights within
+      // reach of the infinite line are visited, a superset of those the segment covers (lane BG3D: a 3D scene
+      // draws about 1,500 short lines a read, and the bounding box visited three times as many lights)
       const half = Math.max(p.width ?? 1, cell * 0.9) / 2;
-      const dx = p.x2 - p.x1;
-      const dy = p.y2 - p.y1;
+      const reach = half + cell * 0.5;
+      const x1 = p.x1, y1 = p.y1, dx = p.x2 - x1, dy = p.y2 - y1;
       const L2 = dx * dx + dy * dy || 1;
-      const pad = half + cell;
-      box(Math.min(p.x1, p.x2) - pad, Math.min(p.y1, p.y2) - pad, Math.max(p.x1, p.x2) + pad, Math.max(p.y1, p.y2) + pad, (i, cx, cy) => {
-        let t = ((cx - p.x1) * dx + (cy - p.y1) * dy) / L2;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const hue2 = p.hue2;
+      const cover = (i, cx, cy) => {
+        let t = ((cx - x1) * dx + (cy - y1) * dy) / L2;
         t = t < 0 ? 0 : t > 1 ? 1 : t;
-        const a = g * coverage(Math.hypot(cx - (p.x1 + t * dx), cy - (p.y1 + t * dy)), half, cell);
+        const ex = cx - (x1 + t * dx), ey = cy - (y1 + t * dy);
+        const a = g * coverage(Math.sqrt(ex * ex + ey * ey), half, cell);
         if (a <= 0) return;
-        const hu = p.hue2 == null ? p.hue : Math.round(p.hue + (p.hue2 - p.hue) * t);
-        put(i, a, hu);
-      });
+        put(i, a, hue2 == null ? p.hue : Math.round(p.hue + (hue2 - p.hue) * t));
+      };
+      if (ady >= adx) {
+        const ext = (reach * Math.sqrt(L2)) / (ady || 1) + cell;
+        const ry0 = Math.max(0, Math.floor((Math.min(y1, p.y2) - reach) / cell));
+        const ry1 = Math.min(h - 1, Math.floor((Math.max(y1, p.y2) + reach) / cell));
+        for (let y = ry0; y <= ry1; y++) {
+          const cy = (y + 0.5) * cell;
+          const xc = ady ? x1 + ((cy - y1) * dx) / dy : x1;
+          const rx0 = Math.max(0, Math.floor((xc - ext) / cell));
+          const rx1 = Math.min(w - 1, Math.floor((xc + ext) / cell));
+          for (let x = rx0; x <= rx1; x++) cover(y * w + x, (x + 0.5) * cell, cy);
+        }
+      } else {
+        const ext = (reach * Math.sqrt(L2)) / adx + cell;
+        const rx0 = Math.max(0, Math.floor((Math.min(x1, p.x2) - reach) / cell));
+        const rx1 = Math.min(w - 1, Math.floor((Math.max(x1, p.x2) + reach) / cell));
+        for (let x = rx0; x <= rx1; x++) {
+          const cx = (x + 0.5) * cell;
+          const yc = y1 + ((cx - x1) * dy) / dx;
+          const ry0 = Math.max(0, Math.floor((yc - ext) / cell));
+          const ry1 = Math.min(h - 1, Math.floor((yc + ext) / cell));
+          for (let y = ry0; y <= ry1; y++) cover(y * w + x, cx, (y + 0.5) * cell);
+        }
+      }
     }
   }
   const bits = new Int8Array(n);
@@ -278,7 +339,8 @@ export function createSceneSettle(canvas, options = {}) {
     if (!force && sameBits(r.bits, F.target) && paint && sameGain(r, paint)) return false;
     F.setTarget(r.bits);
     paint = { hue: r.hue, gain: r.gain };
-    kick = o.kickT - o.cold;
+    const kt = typeof scene.kickT === 'function' ? scene.kickT(clock()) : o.kickT;
+    kick = Math.max(0, (Number.isFinite(kt) ? kt : o.kickT) - o.cold);
     quiet = 0;
     return true;
   };
@@ -368,7 +430,8 @@ export function createSceneSettle(canvas, options = {}) {
     const now = clock();
     // the scene's own motion (sceneMs) and the pointer (pointerMs): re-read the picture, settle into it if it changed
     const pulsing = waves.size > 0;
-    if (now - lastScene >= o.sceneMs || (pointerDirty && now - lastPointer >= o.pointerMs) || (pulsing && now - lastPulse >= o.pointerMs)) {
+    const every = typeof scene.cadence === 'function' ? scene.cadence(now) : o.sceneMs;
+    if (now - lastScene >= (Number.isFinite(every) ? every : o.sceneMs) || (pointerDirty && now - lastPointer >= o.pointerMs) || (pulsing && now - lastPulse >= o.pointerMs)) {
       lastScene = now;
       if (pointerDirty) {
         lastPointer = now;

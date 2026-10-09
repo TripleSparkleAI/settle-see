@@ -6,6 +6,7 @@
 // settle(canvas, opts)  - start a settle on a canvas; returns the handle below
 //   .play() .pause() .toggle() .paused     - motion
 //   .set(opts)                             - change target, items, colours, lean, pull, schedule, speed
+//   .resting                               - true while the rest rule holds the field still (opts.rest)
 //   .morph(opts, how)                      - change items / word / shape / target BY SETTLING (morph.js): a TRUE TIME
 //                                            movie from the picture now to the new one; the schedule keeps its place
 //   .stats()                               - the live numbers (see onStats)
@@ -16,12 +17,23 @@
 //   .show(bits, { snap })                  - settle into this Int8Array now (snap: copy it into the lights at once)
 //   .seek(frame)                           - jump the schedule to a frame
 //   .advance(n)                            - run n frames now, without waiting for the clock, then draw once
+//   .front(x, y, r, width, level, rows)    - a draw-only flash on the lights a wave's front crosses (lane FOOTERMINI)
 //   .frame                                 - the schedule's current frame
 //   .geom                                  - the layout: { cw, ch, w, h, P pitch, sc scale, dw, dh, ox, oy }
 //   .trueTime                              - the TRUE TIME clock when opts.trueTime is set (truetime.js)
 //   .perf                                  - the settle's own meter: { phys, draw, frames } in milliseconds
 //   .renderer                              - '2d', 'gl', or 'gl-failed' (WebGL2 given but the shader did not build)
 // setQuality({ resScale, fpsScale }) / getQuality() - the page-wide quality a site's perf ladder sets once at load
+// fortyScanReady() / fortyScanState()               - the 40 Hz crackle's generator (fortyscan.js), loaded on
+//                                                       demand: start the load / 'idle', 'loading' or 'ready'
+// ringsFor(o, geom, fps, power)                       - pure: the rings, strands and star one click adds (opts.rings)
+// echoRings(o, geom, fps, level, spec)                - pure: the echo's rings (a click's, or spec's), scaled by level
+// radialAnswer(w, R)                                  - pure: this consumer's crest for a page wave (opts.radial: gain,
+//                                                       band, floor)
+// frontCells(cx, cy, R, width, w, h, row0, row1)      - pure: the lights a ring of radius R crosses in rows row0..row1
+// dragPulse(spec, bus)                                - a drop's birth: through clickPulse, else a local ripple
+// tellDropSound(detail)                               - a drop's refusal on the picture's side, as 'settle:dragsound'
+// seenNow(entries, was)                              - pure: on screen or not, from an observer batch's LAST entry
 //
 // ** Technical Review **
 // - opts.shape / opts.word / opts.target: one spec (see target.js); opts.items: a list, cycled by the schedule
@@ -104,6 +116,12 @@
 //   gain morph { showing, frames, done }. Under reduced motion, or for a film item, it is a cut: the new target is
 //   copied into the lights and drawn once. A change of item count falls back to set(), and so does a different film
 //   or live source at the current index (the same film keeps playing).
+// - THE OWED LIGHTS (lane HEROPASS, 2026-10-06): the movie starts from the picture that is LIT, not from the target
+//   the field was heading for, and the lights it changes are OWED: when the movie ends, every light that still
+//   disagrees with the new target joins them, and the field may not rest until each owed light agrees (or
+//   OWED_MAX_FRAMES, 120, pass). Before, a morph begun while another was still running started from the half-way
+//   target, never watched the lights lit from the old words, and the rest rule could freeze them lit. stats().owed
+//   counts them; handle.resting says whether the rest rule holds the field.
 // - THE GLOBAL SETTLE (global.js): every settle registers itself in the page's one registry (opts.global = false
 //   opts out; opts.globalId names it, so a page ripple from that source skips it). A page ripple passing through
 //   leans the lights on its wavefront (a bright crest, a dark trough behind it) and kicks the temperature by
@@ -126,10 +144,43 @@
 //   (lane MULTIRECT): boxes in their inside phase that overlap are ONE ROOM (twinkles wander through the overlap and
 //   push each other), a drop NUDGES the twinkles already alive away from its centre, escaped twinkles of different
 //   boxes bend toward each other (the cross pull), and THE NOISE GATE lets a burst of drags sound at most
-//   DRAG.noiseBurst noises, then DRAG.noisePerSecond (the rest pulse the page silent).
+//   DRAG.noiseBurst DROPS, then DRAG.noisePerSecond drops a second (the rest pulse the page silent). A drop is ONE
+//   event for the gate (lane HERODRAGFIX): it is asked once at the release and its answer rides all four births, which
+//   carry the drop's id (drag) and their part (0 .. 3). A birth the bus refuses is told as 'settle:dragsound'. A mouse
+//   or pen release also reaches the gesture through the window while pressed, so a release outside the canvas
+//   completes the box even where the pointer capture was lost.
 //   Reduced motion, a paused or hidden picture or PAUSE ALL drop still (the marks only, no children). Armed or
 //   dragging, touchmove and contextmenu are prevented, so the finger draws and the phone's long-press menu waits.
 //   handle.dragGroups and handle.dropBox(box) are for tests and a page's own gesture.
+// - opts.weather(info) (lane SOUNDSHAKE, weather.js): once a frame, before beforeStep, a page's modulation of this
+//   settle's own knobs: { heat, lean, pull, rate, soften, streak }; heat multiplies the frame's T, lean and pull
+//   multiply o.lean and o.pull into the field (reset every frame), rate the sweeps (a fraction carried over), soften
+//   replaces the soft read's factor, streak draws a lens-flare band of holds for the frame. The hero's sound drives it.
+//   crackle (lane CLEARTEXT, crackle.js) flares the target's rim lights overbright through the draw-only flash, a few
+//   a frame, with its own generator: the physics, the agreement and the body of the picture are untouched.
+// - opts.fortyCrackle (lane FORTYCRACKLE, fortycrackle.js, reworked into TV scanlines by lane FORTYSCAN; on by
+//   default, false opts out, an object tunes it): THE 40 Hz CRACKLE. While the page's 40 Hz light is on and the frame
+//   drawn is lit, bright scanlines lie over the picture (horizontal, tilted, rolling, interlaced, a vertical-hold
+//   roll, a wobble, a phosphor bloom, chunky retro lines, morphing from one to the next as THE DECK RULE deals them)
+//   and the LIT lights under them are brightened toward white through the draw-only flash, each by its own soft
+//   read, so a light the settle did not light is never drawn. It advances once per lit phase of the gate's clock, so
+//   a dark frame brightens nothing and the square wave is kept. A resting picture keeps its physics still and only
+//   its crackle draws. The meter's perf.forty is its cost in ms. globalThis.__settleFortyCrackleOff = true holds every
+//   crackle off (the brightness tool's switch, so one picture is measured with it off and on). The generator
+//   (fortyscan.js) loads on demand, once a page, at the first lit phase; until it arrives a lit phase draws no lines.
+// - THE RADIAL EFFECTS (radialeffects.js): a page wave crossing this settle is drawn as its member's crest (a user's
+//   click: a crest and a trough; a sound pop: a shimmer, double rings or spokes) and kicks the temperature by that
+//   member's kick.
+// - opts.rings (lane FOOTERLADDER): a GENTLE click instead of the default pulses, in time rather than in frames, so a
+//   slow settle (the footer runs at 4 to 8 fps) answers quickly: { count, reach, ms, gapMs, width, bright, sparks }.
+//   count rings (no combo power), each growing to reach x the shorter side of the grid in ms, gapMs apart, width
+//   lights thick, fading from bright to zero at its reach; sparks strands that live as long as a ring. Absent, the
+//   click is the default pulses above, unchanged (the hero's look). ringsFor(o, geom, fps, power) is the pure rule.
+// - opts.radial (lane FOOTERLADDER): { gain, band, kick } scale this settle's answer to a PAGE wave: the crest's
+//   strength by gain, its width by band, the temperature kick by kick (each default 1). The bus and its shared
+//   constants are untouched; only this consumer answers more softly. floor (lane FOOTERMINI, default 0) is the
+//   least crest strength this consumer draws for any wave that reaches it, so a far, faint wave still shows on a thin
+//   window (the footer's mini strip): radialAnswer(w, R) is the pure rule.
 // - opts.onStats(s) is called every few frames: { T, beta, phase, q, e, ePer, yes, flips, sweeps, rate, w, h, n,
 //   index, item, note }.
 // </claudes_code_comments>
@@ -146,6 +197,29 @@ import { createTrueTime } from './truetime.js';
 import { masterBeat } from './masterbeat.js';
 import { isLive, liveFrame, LIVE_DEFAULTS, LIVE_FRAMES } from './live.js';
 import { createMorph } from './morph.js';
+import { effectHolds } from './radialeffects.js';
+import { weatherOf } from './weather.js';
+import { createRim, crackleRng, crackleFrame } from './crackle.js';
+import { fortyCrackleOf, fortyLitCycle } from './fortycrackle.js';
+// the scanline generator (fortyscan.js) loads on demand, once per page, the first time a lit phase arrives: a page
+// that never turns THE 40 Hz LIGHT on never loads it (lane FORTYSCAN; tests/bundleslim.test.mjs in settle-site)
+let fortyScan = null;
+let fortyScanLoad = null;
+// starts the generator's load if it has not started; resolves to the module (or null if the load failed, in which case
+// the next lit phase tries again). A page or a test may call it to have the generator ready before the light goes on
+export function fortyScanReady() {
+  if (fortyScan) return Promise.resolve(fortyScan);
+  if (!fortyScanLoad) {
+    fortyScanLoad = import('./fortyscan.js').then(
+      (m) => (fortyScan = m),
+      () => ((fortyScanLoad = null), null),
+    );
+  }
+  return fortyScanLoad;
+}
+// 'idle' (never asked for), 'loading' or 'ready'
+export const fortyScanState = () => (fortyScan ? 'ready' : fortyScanLoad ? 'loading' : 'idle');
+const fortyScanNow = () => (fortyScan || (fortyScanReady(), null));
 import { registerSettle, clickPulse } from './global.js';
 import { fortyHz } from './fortyhz.js';
 import { tickerHeld } from './ticker.js';
@@ -162,6 +236,16 @@ export function dragPulse(spec, bus = globalBus) {
   return bus.ripple({ ...s, scope: 'local' });
 }
 
+// a drop's refusal on the picture's side, on the window event settle-hear also uses ('settle:dragsound')
+export function tellDropSound(detail) {
+  if (typeof window === 'undefined' || !window.dispatchEvent || typeof CustomEvent === 'undefined') return;
+  try { window.dispatchEvent(new CustomEvent('settle:dragsound', { detail })); } catch { /* fine */ }
+}
+// THE OBSERVER'S BATCH (lane DJVISUAL): an IntersectionObserver may hand one callback several entries for one target,
+// oldest first (a panel that opens grows its child from clipped to shown inside one frame: [hidden, shown]). The state
+// is the LAST entry's; reading the first left such a settle paused as hidden for good (measured: 1 frame in 6 s)
+export const seenNow = (entries, was = true) => (entries && entries.length ? !!entries[entries.length - 1].isIntersecting : was);
+
 // every live settle's meter, for tools/perf and the perf ladder's budget test (globalThis.__settlePerfs)
 const LIVE = new Set();
 export function settlePerfs() {
@@ -174,6 +258,74 @@ if (typeof globalThis !== 'undefined') globalThis.__settlePerfs = settlePerfs;
 // changed), fpsScale multiplies fps. A settle that the ladder sets itself (the hero, the footer) passes
 // quality: false and its own res and fps. Settles already mounted keep what they had: the level never flaps.
 const QUALITY = { resScale: 1, fpsScale: 1 };
+// THE CLICK RINGS, as a pure rule (lane FOOTERLADDER): what one click adds, for the default pulses or for a gentle
+// opts.rings. Returns { rings: [{ r, speed, width, wait, max, bright }], strands, strandLife, star }. Default: the
+// pulses this file always drew (count 4 + power - 1, speed max(0.8, w / 160) lights a frame growing with power, to the
+// grid's far corner, the fade floored at 0.15). Gentle: count rings that reach their radius in ms at this fps.
+export function ringsFor(o, geom, fps, power = 1) {
+  const far = Math.hypot(geom.w, geom.h);
+  const g = o.rings;
+  if (!g) {
+    const n = (o.pulses ?? 4) + power - 1;
+    const speed = Math.max(0.8, geom.w / 160) * (1 + 0.18 * (power - 1));
+    const width = 0.55 + 0.22 * (power - 1);
+    const rings = [];
+    for (let j = 0; j < n; j++) rings.push({ r: 0, speed, width, wait: j * Math.max(3, 7 - power), max: far, bright: 1, floor: 0.15 });
+    return { rings, strands: 16 + 10 * (power - 1), strandLife: null, star: 1 };
+  }
+  const count = Math.max(1, Math.round(g.count ?? 2));
+  const max = Math.max(2, (g.reach ?? 0.2) * Math.min(geom.w, geom.h));
+  const frames = Math.max(2, ((g.ms ?? 700) / 1000) * fps);
+  const gap = Math.max(1, Math.round(((g.gapMs ?? 160) / 1000) * fps));
+  const rings = [];
+  for (let j = 0; j < count; j++) rings.push({ r: 0, speed: max / frames, width: g.width ?? 0.45, wait: j * gap, max, bright: g.bright ?? 0.5, floor: 0 });
+  return { rings, strands: Math.max(0, Math.round(g.sparks ?? 4)), strandLife: Math.max(2, Math.round(frames)), star: g.bright ?? 0.5 };
+}
+
+// THE ECHO (lane FOOTERRADIAL): the rings a settle draws when a wave from elsewhere reaches it (handle.echo): its own
+// click's rings (ringsFor at power 1), or the gentle rings `spec` names in the same shape as opts.rings, their
+// brightness and the star scaled by level (0..1), the strands kept to the same count or fewer. Pure, so the footer's
+// answer is pinned in a test.
+// THE RADIAL ANSWER (lanes FOOTERLADDER and FOOTERMINI): one consumer's own crest for a page wave, from opts.radial
+// { gain, band, floor }: the strength times gain, never under floor (when the wave has any strength at all), never
+// past 1; the band times band. Absent, the wave as it is. Pure, so the footer's answer is pinned in a test.
+export function radialAnswer(w, R = null) {
+  if (!R) return w;
+  const a = Math.max(0, Number(w?.a) || 0) * (R.gain ?? 1);
+  const floor = Math.max(0, R.floor ?? 0);
+  return { ...w, a: a > 0 ? Math.min(1, Math.max(floor, a)) : 0, band: (w?.band ?? 0) * (R.band ?? 1) };
+}
+
+// THE FRONT (lane FOOTERMINI): the lights of a w x h grid that a ring of radius R (width lights thick) about (cx, cy)
+// crosses, in the rows row0..row1 only. Row by row it solves the circle for its two x, so a thin window (the footer's
+// 10-row strip) costs a few cells a row and never walks the whole ring. Pure; returns a Set of light indices.
+export function frontCells(cx, cy, R, width, w, h, row0 = 0, row1 = h - 1, into = new Set()) {
+  if (!(R > 0) || !(w > 0) || !(h > 0)) return into;
+  const half = Math.max(0.5, width / 2);
+  const y0 = Math.max(0, Math.floor(row0));
+  const y1 = Math.min(h - 1, Math.ceil(row1));
+  for (let y = y0; y <= y1; y++) {
+    const dy = y - cy;
+    for (let rr = Math.max(0, R - half); rr <= R + half + 1e-9; rr += 0.7) {
+      if (Math.abs(dy) > rr) continue;
+      const dx = Math.sqrt(rr * rr - dy * dy);
+      for (const x of [Math.round(cx - dx), Math.round(cx + dx)]) if (x >= 0 && x < w) into.add(y * w + x);
+    }
+  }
+  return into;
+}
+
+export function echoRings(o, geom, fps, level = 1, spec = null) {
+  const L = Math.min(1, Math.max(0, Number.isFinite(level) ? level : 0));
+  const plan = ringsFor(spec ? { ...o, rings: spec } : o, geom, fps, 1);
+  return {
+    rings: plan.rings.map((g) => ({ ...g, bright: g.bright * L })),
+    strands: Math.round(plan.strands * Math.min(1, 0.5 + L / 2)),
+    strandLife: plan.strandLife,
+    star: plan.star * L,
+  };
+}
+
 export function setQuality(q = {}) {
   if (q.resScale > 0) QUALITY.resScale = Math.min(1, q.resScale);
   if (q.fpsScale > 0) QUALITY.fpsScale = Math.min(1, q.fpsScale);
@@ -185,6 +337,8 @@ export function getQuality() {
 
 // a page ripple's temperature kick fades by this factor every frame
 export const GLOBAL_KICK_DECAY = 0.86;
+// the most frames a field may hold off its rest for the lights a morph changed (THE OWED LIGHTS): 5 s at 24 fps
+export const OWED_MAX_FRAMES = 120;
 
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -242,6 +396,56 @@ export function settle(canvas, options = {}) {
   // the temperature kick their arrival gave
   const waves = new Map();
   let kick = 0;
+  // THE WEATHER (lane SOUNDSHAKE): the fractional sweep carried between frames, the last frame's sweep count, and the
+  // lights a lens-flare streak held last frame (let go each frame, as the wavefronts' are)
+  let sweepAcc = 0;
+  let lastSweeps = o.sweeps;
+  let streakLit = [];
+  // THE EDGE CRACKLE (lane CLEARTEXT, crackle.js): the target's rim, found again when the target changes or every few
+  // frames (a live item may rewrite its target in place), and the crackle's own generator (never the physics')
+  const rim = createRim();
+  let rimOf = null;
+  let rimFrame = -1e9;
+  const crackRng = crackleRng(((o.seed ?? 1) * 2654435761) >>> 0);
+  const crackle = (c) => {
+    if (!c || !geom) return;
+    if (F.target !== rimOf || frame - rimFrame >= 6) {
+      rim.update(F.target, geom.w, geom.h);
+      rimOf = F.target;
+      rimFrame = frame;
+    }
+    crackleFrame(F, rim, c, crackRng);
+  };
+  // THE 40 Hz CRACKLE (lane FORTYCRACKLE, fortycrackle.js; TV scanlines since lane FORTYSCAN): while the page's 40 Hz
+  // light is on and the frame drawn is lit, scanlines brighten this picture's lit lights through the draw-only flash,
+  // advancing once per lit phase of the gate's clock; a dark frame brightens nothing. fortyCrackle: false (or
+  // fortyHz: false) opts out; an object tunes it inside FORTY_CRACKLE_LIMITS
+  const fcOpts = o.fortyHz === false ? null : fortyCrackleOf(o.fortyCrackle ?? true);
+  const fortyGate = fcOpts ? fortyHz() : null;
+  let FC = null;
+  let fcCycle = 0;
+  const fortyLit = () => !!F && !!geom && fortyLitCycle(fortyGate) >= 0;
+  const fortyFrame = () => {
+    const c = fortyLitCycle(fortyGate);
+    // globalThis.__settleFortyCrackleOff = true holds every crackle off (a measurement switch: the brightness tool
+    // compares the same picture with the crackle off and on, seconds apart)
+    if (c < 0 || !F || !geom || globalThis.__settleFortyCrackleOff) return 0;
+    const t0 = clock();
+    if (!FC) {
+      const scan = fortyScanNow();
+      if (!scan) return 0; // the generator is still loading: this lit phase draws no lines
+      FC = scan.createFortyCrackle(geom.w, geom.h, { ...fcOpts, seed: (((o.seed ?? 1) * 40503) ^ 0x40c0ffee) >>> 0 });
+      fcCycle = c;
+    } else FC.resize(geom.w, geom.h);
+    // once per lit phase: a picture drawing twice in one phase draws the same set; one that missed phases catches up
+    if (c !== fcCycle) {
+      FC.advance(c > fcCycle ? c - fcCycle : 1);
+      fcCycle = c;
+    }
+    const k = FC.draw(F, F.target);
+    perf.forty += clock() - t0;
+    return k;
+  };
   // SMALL FILMS: an item { film: url } or { frames: [...] } is a list of targets the lights re-settle through
   const films = new Map(); // url -> null while loading, { meta, frames } when loaded, { error } on failure
   // TRUE TIME for a film (truetime.js): the movie behind keeps its own pace on the wall clock (one frame every
@@ -252,6 +456,11 @@ export function settle(canvas, options = {}) {
   const filmClock = o.now ?? masterBeat().now;
   let FT = null; // the current film's true-time clock (null until its frames have arrived)
   let MO = null; // a running morph (morph.js): the field settles from the old target to the new one in true time
+  // THE OWED LIGHTS (lane HEROPASS): the lights a morph changes, from what was LIT to the new target. Until they all
+  // agree with the target (or OWED_MAX_FRAMES pass) the field may not rest, so a word left half-settled by a morph
+  // begun while another was still running is not frozen in place by the rest rule.
+  let owed = null;
+  let owedFrames = 0;
   let rampFrom = null; // the target (Int8Array) the ramp tween starts from, and when
   let rampT0 = 0;
   let filmWork = null; // the lights the last jump changed: TRUE TIME's agreement is measured on these alone
@@ -397,6 +606,7 @@ export function settle(canvas, options = {}) {
     if (isFilm(item)) last.film = { frame: shownFrame, movie: FT ? FT.frameAt(filmClock()) : shownFrame, shown: FT ? FT.history.length : 0, frames: filmLength(item), loading: !!item.film && !films.get(item.film), error: films.get(item.film)?.error ? String(films.get(item.film).error.message ?? films.get(item.film).error) : null };
     if (isLive(item)) last.live = { sample: shownFrame, shown: FT ? FT.history.length : 0, behind: FT ? Math.max(0, FT.frameAt(filmClock()) - FT.showing) : 0, periodMs: FT ? FT.periodMs : null };
     if (MO) last.morph = { showing: MO.showing, frames: MO.frames.length, done: MO.done };
+    last.owed = owed ? owed.length : 0;
     if (TT) last.trueTime = { showing: TT.showing, movie: TT.frameAt(), behind: Math.max(0, TT.frameAt() - TT.showing), shown: TT.history.length, threshold: TT.threshold };
     last.note = describe(last.item);
     o.onStats?.(last);
@@ -450,6 +660,7 @@ export function settle(canvas, options = {}) {
       shownFrame = -1;
       if (ramping) { F.setLeans(null); ramping = false; }
       MO = null; // the schedule moved on to the next item (already in the new form): no morph is owed
+      owed = null;
       if (isFilm(it)) ensureFilm(it);
       else if (!isLive(it)) F.setTarget(targetFor(it));
       // load the NEXT film now, so it is ready when its turn comes (and no earlier)
@@ -522,45 +733,91 @@ export function settle(canvas, options = {}) {
       if (cur.T != null) Tuse = cur.T;
     }
     if (kick > 0.005) Tuse *= 1 + kick;
+    // THE WEATHER (lane SOUNDSHAKE): a page's per-frame modulation of the settle's own knobs, applied before the
+    // page's beforeStep (which may still adjust F.lean or F.pull from here)
+    const W = o.weather ? weatherOf(o.weather({ frame, T: Tuse, phase, index })) : null;
+    if (W) {
+      Tuse *= W.heat;
+      F.lean = o.lean * W.lean;
+      F.pull = o.pull * W.pull;
+    }
     const info = { frame, T: Tuse, beta: 1 / Tuse, phase, index, filmFrame: shownFrame };
     o.beforeStep?.(F, info);
     sparkle();
     pulse();
     swarm();
     wavefronts();
+    streak(W?.streak ?? null);
+    crackle(W?.crackle ?? null);
     kick = kick > 0.005 ? kick * GLOBAL_KICK_DECAY : 0;
-    for (let j = 0; j < o.sweeps; j++) F.sweep(1 / Tuse);
+    // the sweep rate: a weather's rate carries a fractional sweep from frame to frame
+    let nSweeps = o.sweeps;
+    if (W && W.rate !== 1) {
+      sweepAcc += o.sweeps * W.rate;
+      nSweeps = Math.floor(sweepAcc);
+      sweepAcc -= nSweeps;
+    }
+    for (let j = 0; j < nSweeps; j++) F.sweep(1 / Tuse);
+    lastSweeps = nSweeps;
     F.fade(o.trail ?? 0.86);
     F.fadeFlash(o.flashDecay ?? 0.72);
-    F.soften(o.soften ?? 0.55);
+    // after the fade, so a lit phase's brightened lights are drawn at their full strength
+    fortyFrame();
+    F.soften(W?.soften ?? o.soften ?? 0.55);
     frame++;
     if (TR && frame % ((typeof o.traces === 'object' && o.traces.every) || 1) === 0) TR.capture({ T, phase });
     o.afterStep?.(F, info);
     if (MO) {
       const r = MO.update(F.s, filmClock());
       if (r.changed) F.setTarget(MO.target);
-      if (r.done) MO = null;
+      if (r.done) {
+        MO = null;
+        // the movie is over: every light that still disagrees with the new target joins the owed lights
+        const out = owed ? Array.from(owed) : [];
+        const seen = new Set(out);
+        for (let i = 0; i < F.n; i++) if (F.s[i] !== F.target[i] && !seen.has(i)) out.push(i);
+        owed = Int32Array.from(out);
+        owedFrames = 0;
+      }
       quiet = 0;
+    }
+    if (owed && !MO) {
+      // the morph is over: the field still owes the lights it changed until every one agrees with the target
+      if (agreementOn(F.s, F.target, owed) === 1 || ++owedFrames > (o.owedMax ?? OWED_MAX_FRAMES)) owed = null;
+      else quiet = 0;
     }
     if (TT) TT.update(F.overlap());
     if (FT && !ramping) FT.update(agreementOn(F.s, F.target, filmWork ?? []), filmClock());
-    const calm = !kick && !waves.size && !crestLit.length && lastInfo && lastInfo.T === Tuse && lastInfo.index === index && lastInfo.filmFrame === shownFrame && !F.holding && !F.flashing && !sparks.length && !rings.length && !groups.length && !dragRings.length;
+    const calm = !kick && !waves.size && !crestLit.length && !streakLit.length && lastInfo && lastInfo.T === Tuse && lastInfo.index === index && lastInfo.filmFrame === shownFrame && !F.holding && (!F.flashing || !!fortyGate?.on) && !sparks.length && !rings.length && !ringLit.length && !groups.length && !dragRings.length;
+    // (under the 40 Hz light a flash does not keep a resting picture awake: the rest path below draws its crackle and
+    // fades its flashes without moving the physics)
     quiet = calm ? quiet + 1 : 0;
     lastInfo = info;
     return info;
   };
 
   // the settle's own meter: milliseconds in the physics (sweeps, soft read, hooks) and in the drawing
-  const perf = { phys: 0, draw: 0, frames: 0 };
+  const perf = { phys: 0, draw: 0, frames: 0, forty: 0 };
   const live = { perf, label: () => o.perfLabel ?? (geom ? `settle ${geom.w}x${geom.h}` : 'settle'), kind: () => R?.kind ?? (gl ? 'gl-failed' : '2d') };
   LIVE.add(live);
   const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const step = (now) => {
-    if (resting() && quiet > (o.restAfter ?? 24)) return;
+    if (resting() && quiet > (o.restAfter ?? 24)) {
+      // a resting picture keeps its physics still; under the 40 Hz light only its crackle moves (draw-only)
+      if (fcOpts && F && (fortyLit() || F.flashing)) {
+        const t1 = clock();
+        F.fadeFlash(o.flashDecay ?? 0.72);
+        fortyFrame();
+        draw();
+        perf.draw += clock() - t1;
+        perf.frames++;
+      }
+      return;
+    }
     const t0 = clock();
     const { T, phase } = stepOnce();
     const t1 = clock();
-    rateN += o.sweeps;
+    rateN += lastSweeps;
     if (now - rateT > 1000) {
       rate = (rateN * 1000) / (now - rateT || 1);
       rateT = now;
@@ -606,7 +863,7 @@ export function settle(canvas, options = {}) {
   layout();
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => { layout(); draw(); }) : null;
   ro?.observe(canvas);
-  const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { rootMargin: '120px' }) : null;
+  const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((es) => { visible = seenNow(es, visible); }, { rootMargin: '120px' }) : null;
   io?.observe(canvas);
 
   let loop = null;
@@ -644,16 +901,36 @@ export function settle(canvas, options = {}) {
     });
     if (lastPoke && performance.now() - lastPoke.wall < 700) star(lastPoke.x, lastPoke.y, 0.8);
   };
+  // a gentle ring (opts.rings) is a crest, not a trail: the lights it held last frame are let go before it moves on, so
+  // a slow settle shows one thin travelling ring instead of a stack of fading copies (lane FOOTERLADDER)
+  let ringLit = [];
   const pulse = () => {
+    for (const i of ringLit) F.held[i] = 0;
+    ringLit = [];
     // rings: each waits its turn, then grows by `speed` lights a frame, holding the thin circle it sweeps through
     if (!rings.length) return;
     const v = o.pokeValue ?? 1;
-    const far = Math.hypot(geom.w, geom.h);
     rings = rings.filter((g) => {
       if (g.wait-- > 0) return true;
       g.r += g.speed;
-      if (g.r > far) return false;
-      const fade = Math.max(0.15, 1 - g.r / (far * 0.8));
+      if (g.r > g.max) return false;
+      if (g.floor === 0) {
+        // gentle: one light wide, fading from its brightness to nothing at its reach
+        const a = g.bright * (1 - g.r / g.max);
+        const steps = Math.ceil(2 * Math.PI * g.r * 1.2);
+        for (let j = 0; j < steps; j++) {
+          const t = (j / steps) * Math.PI * 2;
+          const xi = Math.round(g.x + Math.cos(t) * g.r);
+          const yi = Math.round(g.y + Math.sin(t) * g.r);
+          if (xi < 0 || yi < 0 || xi >= geom.w || yi >= geom.h) continue;
+          const i = yi * geom.w + xi;
+          F.holdIndex(i, v, a);
+          ringLit.push(i);
+        }
+        return true;
+      }
+      // the default pulses fade to a floor of 0.15 over 80% of the far corner
+      const fade = Math.max(g.floor, 1 - g.r / (g.max * 0.8));
       const steps = Math.ceil(2 * Math.PI * g.r * 1.2);
       for (let j = 0; j < steps; j++) {
         const a = (j / steps) * Math.PI * 2;
@@ -743,37 +1020,35 @@ export function settle(canvas, options = {}) {
     const u = 1 / (geom.P * geom.sc);
     return { x: (w.x * k - geom.ox) * u, y: (w.y * k - geom.oy) * u, s: k * u };
   };
-  // the cells on the band R - width/2 .. R + width/2 of a circle round (cx, cy), inside the grid: only the arc of the
-  // ring that crosses the grid is walked (seen from outside, the smallest arc covering the grid's four corners)
-  const arcCells = (cx, cy, R, width, into) => {
-    if (R <= 0) return into;
-    let a0 = 0;
-    let a1 = Math.PI * 2;
-    const inside = cx >= -1 && cy >= -1 && cx <= geom.w + 1 && cy <= geom.h + 1;
-    if (!inside) {
-      const angs = [[0, 0], [geom.w, 0], [0, geom.h], [geom.w, geom.h]].map(([x, y]) => Math.atan2(y - cy, x - cx)).sort((p, q) => p - q);
-      let gap = -1;
-      let at = 0;
-      for (let i = 0; i < 4; i++) {
-        const g = (i === 3 ? angs[0] + Math.PI * 2 : angs[i + 1]) - angs[i];
-        if (g > gap) { gap = g; at = i; }
-      }
-      a0 = angs[(at + 1) % 4];
-      a1 = a0 + (Math.PI * 2 - gap);
+  // THE STREAK (lane SOUNDSHAKE): a lens-flare streak across the field, as a band of holds for this frame only: a
+  // line through (x, y) (fractions of the grid) tilted by `tilt` radians, `width` lights thick, its strength falling
+  // off from the flare's centre over `reach` of the grid's width, each light shimmering by `shimmer` (field.rng)
+  const streak = (S) => {
+    if (streakLit.length) {
+      for (const i of streakLit) F.held[i] = 0;
+      streakLit = [];
     }
-    const half = width / 2;
-    for (let dr = -half; dr <= half + 1e-9; dr += 0.7) {
-      const r = R + dr;
-      if (r <= 0) continue;
-      const step = 0.7 / r;
-      for (let t = a0; t <= a1; t += step) {
-        const x = Math.round(cx + Math.cos(t) * r);
-        const y = Math.round(cy + Math.sin(t) * r);
-        if (x < 0 || y < 0 || x >= geom.w || y >= geom.h) continue;
-        into.add(y * geom.w + x);
+    if (!S || !(S.strength > 0) || !geom) return;
+    const v = o.pokeValue ?? 1;
+    const W = geom.w;
+    const H = geom.h;
+    const x0 = (S.x ?? 0.5) * W;
+    const y0 = (S.y ?? 0.5) * H;
+    const k = Math.tan(S.tilt ?? 0);
+    const half = Math.max(0.5, (S.width ?? 1.5) / 2);
+    const reach = Math.max(1, (S.reach ?? 0.4) * W);
+    const sh = Math.min(1, Math.max(0, S.shimmer ?? 0.3));
+    const a = Math.min(0.6, S.strength);
+    for (let x = 0; x < W; x++) {
+      const fall = Math.exp(-(((x - x0) / reach) ** 2));
+      if (fall < 0.05) continue;
+      const yc = y0 + (x - x0) * k;
+      for (let y = Math.max(0, Math.ceil(yc - half)); y <= Math.min(H - 1, Math.floor(yc + half)); y++) {
+        const i = y * W + x;
+        F.holdIndex(i, v, a * fall * (1 - sh + sh * F.rng.unit()) * (1 - Math.abs(y - yc) / (half + 0.5)));
+        streakLit.push(i);
       }
     }
-    return into;
   };
   // the wavefront moves on every frame: the lights it held last frame are let go (the physics relaxes them), so the page sees one
   // travelling crest (bright) with a trough just behind it (off), never a stack of rings
@@ -783,15 +1058,12 @@ export function settle(canvas, options = {}) {
     for (const i of crestLit) F.held[i] = 0;
     crestLit = [];
     const v = o.pokeValue ?? 1;
+    // THE RADIAL EFFECTS (radialeffects.js): each wave draws its own member's crest (a user's click: a crest and a
+    // trough; a sound's shimmer, double rings or spokes), as holds on the lights for this frame only
+    const hold = (i, sign, a) => { F.hold(i % geom.w, (i / geom.w) | 0, 0.5, sign * v, a); crestLit.push(i); };
     for (const w of waves.values()) {
       const L = toLights(w);
-      const R = w.r * L.s;
-      const band = Math.max(2, w.band * L.s);
-      const a = Math.min(1, w.a);
-      const crest = arcCells(L.x, L.y, R, Math.max(1, band * 0.25), new Set());
-      const trough = arcCells(L.x, L.y, R - band * 0.4, Math.max(1, band * 0.2), new Set());
-      for (const i of trough) if (!crest.has(i)) { F.hold(i % geom.w, (i / geom.w) | 0, 0.5, -v, a * 0.6); crestLit.push(i); }
-      for (const i of crest) { F.hold(i % geom.w, (i / geom.w) | 0, 0.5, v, a); crestLit.push(i); }
+      effectHolds(w.effect ?? 'click', { x: L.x, y: L.y, R: w.r * L.s, band: w.band * L.s, a: w.a, turn: w.turn ?? 0 }, geom.w, geom.h, hold);
     }
     waves.clear();
   };
@@ -819,12 +1091,13 @@ export function settle(canvas, options = {}) {
     el: canvas,
     wave(w) {
       if (dead || paused || !visible || !geom || !F) return;
-      waves.set(w.id, w);
+      // opts.radial (lane FOOTERLADDER): this consumer's own softer answer; the wave itself is unchanged
+      waves.set(w.id, radialAnswer(w, o.radial));
       quiet = 0;
     },
     arrive(a) {
       if (dead || paused || !visible || !F) return;
-      kick = Math.min(1.2, kick + a.kick);
+      kick = Math.min(1.2, kick + a.kick * (o.radial?.kick ?? 1));
       quiet = 0;
     },
     pulse: softPulse,
@@ -866,20 +1139,19 @@ export function settle(canvas, options = {}) {
     const maxP = o.maxPower ?? 8;
     power = now - lastClick < (o.comboMs ?? 1000) ? Math.min(maxP, power + 1) : 1;
     lastClick = now;
-    const n = (o.pulses ?? 4) + power - 1;
-    const speed = Math.max(0.8, geom.w / 160) * (1 + 0.18 * (power - 1));
-    const width = 0.55 + 0.22 * (power - 1);
-    for (let j = 0; j < n; j++) rings.push({ x, y, r: 0, speed, width, wait: j * Math.max(3, 7 - power) });
-    const burst = 16 + 10 * (power - 1);
+    // THE CLICK RINGS (ringsFor): the default pulses, or the gentle rings of opts.rings (lane FOOTERLADDER)
+    const plan = ringsFor(o, geom, fpsOf(), power);
+    for (const g of plan.rings) rings.push({ x, y, ...g });
+    const burst = plan.strands;
     for (let j = 0; j < burst; j++) {
       const a = (j / burst) * Math.PI * 2 + F.rng.unit() * 0.2;
       const sp = 1.6 * (1 + 0.15 * (power - 1)) * (0.7 + 0.6 * F.rng.unit());
-      sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 30 + 6 * power + F.rng.below(20) });
+      sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: plan.strandLife ?? 30 + 6 * power + F.rng.below(20) });
     }
-    if (power === maxP) F.shake(0.08);
+    if (power === maxP && !o.rings) F.shake(0.08);
     quiet = 0;
     if (last) { last.power = power; last.maxPower = maxP; o.onStats?.(last); }
-    star(x, y, 1);
+    star(x, y, plan.star);
     // a settle with sound: the click is a LOCAL ripple on the page's bus, which plays a click noise
     // THE RADIAL PULSE BUS (global.js clickPulse): the local ripple plays the noise and a page pulse from the same
     // point reaches every other settle, background and sound on the page; this settle is the source and keeps to its own rings
@@ -894,6 +1166,7 @@ export function settle(canvas, options = {}) {
   let armTimer = null;
   let dragSerial = 0;
   let noiseGate = null; // THE NOISE GATE (lane MULTIRECT), one per settle, made at the first drop
+  let winUp = false; // the window's pointerup fallback is armed for this press
   const clientMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const cssSize = () => {
     const r = canvas.getBoundingClientRect();
@@ -920,6 +1193,7 @@ export function settle(canvas, options = {}) {
   const endPress = () => {
     if (armTimer) clearTimeout(armTimer);
     armTimer = null;
+    if (winUp) { winUp = false; try { window.removeEventListener('pointerup', dragUp, true); } catch { /* gone */ } }
     // let go of the gesture before the capture: releasing it fires lostpointercapture, which must find nothing
     const pid = press?.pointerId;
     G = null;
@@ -953,12 +1227,20 @@ export function settle(canvas, options = {}) {
     }
     tellDrag({ phase: 'drop', id, box: b, fadeMs, lifeMs: T.lifeMs, insideMs: T.insideMs, still, marks, children: marks.length });
     // the four births are heard one after another (THE CLICK LOCK replays the locked sound; MUTE ALL and the gesture
-    // rule are settle-hear's): a LOCAL ripple each, on the page's bus
+    // rule are settle-hear's): a LOCAL ripple each, on the page's bus. THE DROP IS ONE EVENT (lane HERODRAGFIX): THE
+    // NOISE GATE is asked once, at the release, and its answer rides all four births, which carry the drop's id and
+    // their part (0 .. 3), so the hearing plays the drop as one sound and never half of one
     if (o.audio) {
       const pg = { x: S.r.left + ((typeof window !== 'undefined' && window.scrollX) || 0), y: S.r.top + ((typeof window !== 'undefined' && window.scrollY) || 0) };
       noiseGate ??= createNoiseGate({ burst: C.noiseBurst, perSecond: C.noisePerSecond });
+      const loud = noiseGate.take(clientMs());
       marks.forEach((m, j) => {
-        const send = () => { if (!dead) dragPulse({ x: pg.x + m.x, y: pg.y + m.y, strength: 0.6, source: o.globalId ?? null, power: 1, drag: id, sound: noiseGate.take(clientMs()) }); };
+        const send = () => {
+          if (dead) return;
+          const r = dragPulse({ x: pg.x + m.x, y: pg.y + m.y, strength: 0.6, source: o.globalId ?? null, power: 1, drag: id, part: j, sound: loud });
+          // the bus refused the birth (PAUSE ALL, a hidden tab, an away reader): say so, never silently
+          if (!r) tellDropSound({ key: `${o.globalId ?? ''}:${id}`, part: j, ok: false, reason: 'bus-not-running' });
+        };
         if (j === 0) send();
         else { const T = setTimeout(send, j * C.soundGapMs); T?.unref?.(); }
       });
@@ -989,6 +1271,12 @@ export function settle(canvas, options = {}) {
       // no text selection, no focus jump: the press belongs to the picture
       ev.preventDefault?.();
       try { canvas.setPointerCapture?.(ev.pointerId); } catch { /* not capturable */ }
+      // THE RELEASE ANYWHERE (lane HERODRAGFIX): the capture sends the release to the canvas; where a browser lost or
+      // refused it, the window still hears it, so a release outside the hero completes the box
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('pointerup', dragUp, true);
+        winUp = true;
+      }
     }
     return undefined;
   };
@@ -1062,6 +1350,41 @@ export function settle(canvas, options = {}) {
     get frame() { return frame; },
     seek(f) { frame = f; quiet = 0; },
     advance(n = 1) { advance(n); },
+    // one frame exactly as the shared ticker runs it, the rest rule included (tests, and a page driving its own loop)
+    tick(now) { if (!dead) step(now); },
+    // THE ECHO (lane FOOTERRADIAL): a wave from elsewhere answered with this settle's own gentle rings, from a point in
+    // the canvas's own CSS px; no sound, no page pulse (the wave is already on the bus), nothing while paused or hidden
+    echo(x, y, level = 1, spec = null) {
+      if (dead || paused || !visible || !geom || !F || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+      const L = toLights({ x, y, w: canvas.getBoundingClientRect().width });
+      const plan = echoRings(o, geom, fpsOf(), level, spec);
+      for (const g of plan.rings) rings.push({ x: L.x, y: L.y, ...g });
+      for (let j = 0; j < plan.strands && sparks.length < 400; j++) {
+        const a = (j / Math.max(1, plan.strands)) * Math.PI * 2 + F.rng.unit() * 0.2;
+        const sp = 1.6 * (0.7 + 0.6 * F.rng.unit());
+        sparks.push({ x: L.x, y: L.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: plan.strandLife ?? 30 + F.rng.below(20) });
+      }
+      if (plan.star > 0) star(L.x, L.y, plan.star);
+      quiet = 0;
+      return true;
+    },
+    // THE FRONT (lane FOOTERMINI): a draw-only flash on the lights a wave's front crosses, from its origin (x, y) and
+    // radius r in the canvas's own CSS px, width lights thick, at level (0..1), only in the canvas rows rows = [top,
+    // bottom] (CSS px; the part a window shows). The physics is untouched (a flash, like the crackle); it fades by
+    // opts.flashDecay a frame, so a front drawn every bus frame leaves a short bright trail. Nothing while paused or
+    // hidden. Returns the number of lights flashed.
+    front(x, y, r, width = 2, level = 1, rows = null) {
+      if (dead || paused || !visible || !geom || !F || !Number.isFinite(x) || !Number.isFinite(y) || !(r > 0)) return 0;
+      const cssW = canvas.getBoundingClientRect().width;
+      const L = toLights({ x, y, w: cssW });
+      const top = rows ? toLights({ x: 0, y: rows[0], w: cssW }).y : 0;
+      const bottom = rows ? toLights({ x: 0, y: rows[1], w: cssW }).y : geom.h - 1;
+      const cells = frontCells(L.x, L.y, r * L.s, width, geom.w, geom.h, top, bottom);
+      if (!cells.size) return 0;
+      F.flash(cells, Math.max(0, Math.min(1, level)));
+      quiet = 0;
+      return cells.size;
+    },
     show(bits, { snap: copy = !!o.still } = {}) {
       if (!F || bits.length !== F.n) return false;
       index = sched(frame).index;
@@ -1128,23 +1451,31 @@ export function settle(canvas, options = {}) {
       const it = list[Math.max(0, index) % list.length];
       if (index < 0 || isFilm(it)) return false; // a film keeps playing; its words are in the caption, not the lights
       const to = targetFor(it);
-      const from = Int8Array.from(F.target);
+      // the movie starts from what is LIT, not from the target the field was heading for: a morph begun while another
+      // was still running (or while the lights were still settling) would otherwise never watch the lights that are
+      // lit from the old words and off in both targets, and the rest rule froze them lit (lane HEROPASS)
+      const from = Int8Array.from(F.s);
       let same = true;
-      for (let i = 0; i < to.length && same; i++) same = from[i] === to[i];
+      for (let i = 0; i < to.length && same; i++) same = F.target[i] === to[i];
       if (same) return false;
       if (!animate()) {
         MO = null;
+        owed = null;
         F.setTarget(to);
         snap();
         draw();
         return false;
       }
       MO = createMorph({ from, to, width: geom.w, seed: o.seed, now: filmClock, ...how });
+      owed = changedLights(to, from);
+      owedFrames = 0;
       F.setTarget(MO.target);
       if (paused || !visible || !loop) draw();
       return true;
     },
     get morphing() { return !!MO; },
+    // true while the rest rule holds the field still (opts.rest): no sweeps and no drawing until something wakes it
+    get resting() { return resting() && quiet > (o.restAfter ?? 24); },
     destroy() {
       dead = true;
       LIVE.delete(live);

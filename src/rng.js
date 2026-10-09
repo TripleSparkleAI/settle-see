@@ -5,7 +5,7 @@
 // Rng(seed)   - xorshift128: u32(), unit() in [0,1), signed() in [-1,1), below(n)
 //
 // ** Technical Review **
-// - The same generator as the SETTLE site's JavaScript sampler (sites/settle-site/src/engine/ising.js), copied so
+// - The same generator as the SETTLE site's JavaScript sampler (SETTLE/settle-site/src/engine/ising.js), copied so
 //   the library stands alone with no import from any site.
 // </claudes_code_comments>
 

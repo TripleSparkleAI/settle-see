@@ -6,7 +6,8 @@
 // CORTEX_LAYERS            - the six layers of the cerebral cortex, top (the surface) to bottom, with their depth shares
 // CEREBELLUM_LAYERS        - the three layers of the cerebellar cortex: molecular, Purkinje cell, granular
 // BRAIN_VIEWS              - the footer's cycle of views: the side section, looking up from below, two voyages
-// brainScene(w, h, spec)   - { bits, paths, labels, rects } for a w x h grid; spec { view, eye, bands } (cached)
+// brainScene(w, h, spec)   - { bits, paths, labels, rects } for a w x h grid; spec { view, eye, bands, split } (cached)
+// BAND_SPLIT               - 0.5: where the gap between the two bands is centred unless spec.split moves it
 // rideScene(w, h, spec)    - the voyage seen from a steered camera { x, y, z, yaw, pitch } (RIDE_START, clampRide);
 //                            the tissue repeats along z both ways and stacks UPWARD without end (rideTiers), with a sparse far
 //                            field beyond RIDE_FAR (farField) when spec.far is not false
@@ -379,11 +380,16 @@ const FIBRE_YS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45];
 
 // ── the scene ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-function bandRects(w, h, bands) {
+// split (spec.split, default 0.5): where the gap between the two bands is centred, as a fraction of the height. The
+// footer (lane FOOTERLADDER) passes 0.38, so the cerebellar band is the larger and holds the credits text
+export const BAND_SPLIT = 0.5;
+const splitOf = (s) => (Number.isFinite(s) ? Math.min(0.7, Math.max(0.3, s)) : BAND_SPLIT);
+function bandRects(w, h, bands, split = BAND_SPLIT) {
   if (bands === 'both') {
+    const k = splitOf(split);
     return [
-      { band: 'cortex', x0: 0, y0: Math.round(h * 0.035), x1: w - 1, y1: Math.round(h * 0.47) },
-      { band: 'cerebellum', x0: 0, y0: Math.round(h * 0.53), x1: w - 1, y1: Math.round(h * 0.965) },
+      { band: 'cortex', x0: 0, y0: Math.round(h * 0.035), x1: w - 1, y1: Math.round(h * (k - 0.03)) },
+      { band: 'cerebellum', x0: 0, y0: Math.round(h * (k + 0.03)), x1: w - 1, y1: Math.round(h * 0.965) },
     ];
   }
   return [{ band: bands, x0: 0, y0: Math.round(h * 0.04), x1: w - 1, y1: Math.round(h * 0.96) }];
@@ -717,7 +723,7 @@ export function rideScene(w, h, spec = {}) {
   const cam = clampRide({ ...RIDE_START, ...(spec.cam ?? {}) });
   const seed = spec.seed ?? 20261001;
   const R = new Raster(w, h);
-  const rects = bandRects(w, h, spec.bands ?? 'both');
+  const rects = bandRects(w, h, spec.bands ?? 'both', spec.split);
   for (const rc of rects) {
     if (rc.band === 'cortex') rideCortex(R, rc, eye, cam, seed, spec.far !== false, spec.t ?? 0);
     else rideCerebellum(R, rc, eye, cam, seed + 7);
@@ -733,12 +739,13 @@ export function brainScene(w, h, spec = {}) {
   const eye = spec.eye ?? 0.5;
   const bands = spec.bands ?? 'both';
   const seed = spec.seed ?? 20261001;
-  const key = `${w}x${h}:${view}:${eye}:${bands}:${seed}`;
+  const split = splitOf(spec.split);
+  const key = `${w}x${h}:${view}:${eye}:${bands}:${seed}:${split}`;
   if (CACHE.has(key)) return CACHE.get(key);
   const R = new Raster(w, h);
   const paths = [];
   const labels = [];
-  const rects = bandRects(w, h, bands);
+  const rects = bandRects(w, h, bands, split);
   for (const rc of rects) {
     if (rc.band === 'cortex') drawCortex(R, rc, view, eye, seed, paths, labels, h);
     else drawCerebellum(R, rc, view, eye, seed + 7, paths, labels, h);

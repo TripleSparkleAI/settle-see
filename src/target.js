@@ -9,7 +9,7 @@
 //
 // ** Technical Review **
 // - A spec can be: a registered shape name ('heart'); any other string (a word to write); { word, font, weight };
-//   { shape, ...params }; { svg: 'M0 0 L...' } with an optional viewBox [x, y, w, h]; { draw: (c, w, h, u) => {} };
+//   { shape, ...params } (a word with a draw is drawn, its word kept as its name); { svg: 'M0 0 L...' } with an optional viewBox [x, y, w, h]; { draw: (c, w, h, u) => {} };
 //   a shape registered with defineBits() is read straight from its bits(w, h), with no canvas (so it works in node);
 //   { image } holding an <img>, ImageBitmap or canvas (or a URL, through loadTarget); { bits: Int8Array } as is.
 // - Everything is painted white on black into a w x h canvas and thresholded (opts.threshold, default 110 of 255).
@@ -98,7 +98,8 @@ export function toTarget(spec, w, h, opts = {}) {
   if (typeof spec === 'string') spec = getShape(spec) ? { shape: spec } : { word: spec };
   const o = { ...opts, ...(spec.threshold != null ? { threshold: spec.threshold } : {}), ...(spec.invert ? { invert: true } : {}) };
   let data;
-  if (spec.word != null) data = paint(w, h, (c) => word(String(spec.word), c, w, h, spec));
+  // a spec with both a word and a draw is drawn (the word stays its name: the site's hero typesets its still words)
+  if (spec.word != null && !spec.draw) data = paint(w, h, (c) => word(String(spec.word), c, w, h, spec));
   else if (spec.shape) {
     const s = getShape(spec.shape);
     if (!s) throw new Error(`settle-see: no shape named "${spec.shape}"`);

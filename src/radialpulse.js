@@ -8,12 +8,16 @@
 // RADIAL_DEFAULTS                      - speed 900 px/s, band 56 px, fade 1400 px, floor 0.04, maxWaves 8, margin 160,
 //                                        stillMs 450
 // PULSE_EVENT                          - 'settle:pulse', the window event every emit() fires
+// admits(only, e)                     - pure: does a wave confined by only reach consumer e (its id, or everyWave)
 // arrivalMs(d, o) / falloff(d, s, o)   - pure: when a front first touches a thing d px away, and the gradient there
 // nearestPoint(x, y, r) / farthestCorner(x, y, r) / onScreen(r, v, margin) - pure rectangle geometry
 // createRadialPulse(opts)              - a bus with injected window, clock, frame, reduced-motion, state and viewport
 //                                        (tests); returns the object below
-//   .register(consumer) -> off         - { id, el | rect(), respond(w), arrive(w), leave(w), still(w) }
-//   .emit(spec) -> detail | null       - { x, y, strength, kind, source, space: 'page' | 'client', speed }
+//   .register(consumer) -> off         - { id, el | rect(), respond(w), arrive(w), leave(w), still(w), everyWave }
+//   .emit(spec) -> detail | null       - { x, y, strength, kind, source, space: 'page' | 'client', speed, effect,
+//                                        only, turn }: effect names a member of THE RADIAL EFFECTS (radialeffects.js,
+//                                        'click' by default) whose speed, band, fade, cap and stillness the wave takes;
+//                                        only: a consumer id, the one consumer that answers (a pop inside the hero)
 //   .onPulse(fn) -> off                - hear every pulse sent (the detail of the window event)
 //   .tick(t)                           - one frame of every travelling wave (the frame loop calls it; tests too)
 //   .running()                         - is the page running (not PAUSE ALL, hidden or away)
@@ -52,6 +56,19 @@
 //   and falls as it passes, so a picture a page draws on its own canvas (a film stage, a player) answers the wave with
 //   no page code and no per-frame work. An element that something already registered, or that contains a registered
 //   element (a wrap round a settle's canvas), is left to that consumer.
+// - THE RADIAL EFFECTS (lane SOUNDSHAKE, radialeffects.js): every wave is one member of a named family. A user's click
+//   (and every wave before the family existed) is 'click'; the sound's pops are 'shimmer', 'double' and 'spokes'. The
+//   member sets the wave's speed, band and fade (so the front's timing and gradient are its own), caps its strength,
+//   and rides on w.effect, so a consumer (mount.js) draws its own variation of the crest. only: id keeps a wave to one
+//   consumer (the hero's pops never cross the page, and never reach the hero's sound anchor). Over maxWaves the oldest
+//   machine wave (a SOUND pop, a KEY step's member) is dropped first, so a run of them never pushes out a visitor's
+//   click. A member with still: false sends nothing under reduced motion.
+// - EVERY WAVE (lane FOOTERRADIAL, 2026-10-04): a consumer registered with everyWave: true hears a wave confined by
+//   only as well (admits()), so a page's mirror (the footer's echo) answers the hero's key steps and sound pops; the
+//   source rule still holds, so nothing hears its own wave.
+// - THE DETAIL every emit tells carries from (the member's family: 'user', 'sound' or 'keys') and drag (the drag box's
+//   own id when a drop sent it, else null), so a listener can tell a person's waves from the machine's and count a
+//   drag once however many pulses it sends (lane HEROKEYS, the site's burst counter).
 // - THE CLOCK is THE MASTER BEAT's (masterbeat.js), so every wave's dt agrees with every TRUE TIME movie and the 40 Hz
 //   light, and the bus's one frame reads the same time the drawings do.
 // - settle-see's own settles join through global.js (THE GLOBAL SETTLE is now a face over this bus: ripple() is
@@ -61,6 +78,7 @@
 
 import { tickerState, onTickerState } from './ticker.js';
 import { masterBeat } from './masterbeat.js';
+import { effectOf } from './radialeffects.js';
 
 export const RADIAL_DEFAULTS = Object.freeze({
   speed: 900, // px/s: how fast the front travels across the page
@@ -74,6 +92,10 @@ export const RADIAL_DEFAULTS = Object.freeze({
 });
 
 export const PULSE_EVENT = 'settle:pulse';
+
+// only: a wave confined to one consumer (the hero's pops and key steps) reaches that consumer, and also every
+// consumer marked everyWave (the footer's echo, lane FOOTERRADIAL: every radial event reaches the footer's settle)
+export const admits = (only, e) => only == null || e.id === only || e.everyWave === true;
 
 export const arrivalMs = (d, o = RADIAL_DEFAULTS) => (Math.max(0, d - (o.band ?? RADIAL_DEFAULTS.band)) * 1000) / (o.speed ?? RADIAL_DEFAULTS.speed);
 export const falloff = (d, strength = 1, o = RADIAL_DEFAULTS) => strength * Math.exp(-Math.max(0, d) / (o.fade ?? RADIAL_DEFAULTS.fade));
@@ -166,12 +188,12 @@ export function createRadialPulse(opts = {}) {
     const cy = R.top + R.height / 2;
     const dist = Math.hypot(cx - wv.x, cy - wv.y);
     const dir = dist > 1e-9 ? { x: (cx - wv.x) / dist, y: (cy - wv.y) / dist } : { x: 0, y: 0 };
-    const span = D - d + 2 * P.band;
+    const span = D - d + 2 * wv.band;
     return {
-      id: wv.id, kind: wv.kind, source: wv.source, strength: wv.strength, speed: wv.speed,
+      id: wv.id, kind: wv.kind, source: wv.source, strength: wv.strength, speed: wv.speed, effect: wv.effect, turn: wv.turn,
       x: wv.x - R.left, y: wv.y - R.top, ox: wv.x, oy: wv.y, w: R.width, h: R.height,
-      d, dist, r, band: P.band, a: falloff(d, wv.strength, P), front: falloff(r, wv.strength, P),
-      phase: span > 0 ? Math.min(1, Math.max(0, (r - (d - P.band)) / span)) : 1,
+      d, dist, r, band: wv.band, a: falloff(d, wv.strength, wv), front: falloff(r, wv.strength, wv),
+      phase: span > 0 ? Math.min(1, Math.max(0, (r - (d - wv.band)) / span)) : 1,
       passMs: (span * 1000) / wv.speed,
       dir, t, dt: t - wv.t0, reduced: false,
     };
@@ -185,18 +207,19 @@ export function createRadialPulse(opts = {}) {
     const keep = [];
     for (const wv of live) {
       const r = (wv.speed * Math.max(0, t - wv.t0)) / 1000;
-      const front = falloff(r, wv.strength, P);
+      const front = falloff(r, wv.strength, wv);
       let ahead = false;
       const arrivals = [];
       for (const e of consumers) {
         if (e.id != null && e.id === wv.source) continue;
+        if (!admits(wv.only, e)) continue;
         const R = rectOf(e);
         if (!R || !(R.width > 0) || !(R.height > 0)) continue;
         if (!onScreen(R, v, P.margin)) continue;
         const d = nearestPoint(wv.x, wv.y, R);
-        if (r + P.band < d) { ahead = true; continue; }
+        if (r + wv.band < d) { ahead = true; continue; }
         const D = farthestCorner(wv.x, wv.y, R);
-        const passed = r - P.band > D;
+        const passed = r - wv.band > D;
         // a long frame may carry the front past a consumer it never touched: it still arrives (once), then leaves
         if (!wv.reached.has(e)) { wv.reached.add(e); arrivals.push({ e, w: waveFor(wv, e, R, d, D, r, t), passed }); if (!passed) ahead = true; continue; }
         if (passed) {
@@ -284,21 +307,32 @@ export function createRadialPulse(opts = {}) {
         x += win?.scrollX ?? win?.pageXOffset ?? 0;
         y += win?.scrollY ?? win?.pageYOffset ?? 0;
       }
-      const strength = Math.min(1, Math.max(0, Number.isFinite(spec.strength) ? spec.strength : 1));
-      const speed = Number.isFinite(spec.speed) && spec.speed > 0 ? spec.speed : P.speed;
-      const wv = { id: ++serial, x, y, strength, speed, kind: spec.kind ?? 'pulse', source: spec.source ?? null, t0: now(), reached: new Set(), left: new Set() };
-      const detail = { id: wv.id, x, y, strength, kind: wv.kind, source: wv.source, speed, sound: !!spec.sound, reduced: false, t0: wv.t0 };
+      // THE RADIAL EFFECTS: the member named (a user's click by default) times, fades and caps the wave; a plain click
+      // keeps the bus's own numbers, so every wave from before the family is unchanged
+      const fx = effectOf(spec.effect);
+      const named = spec.effect != null && fx.key !== 'click';
+      const strength = Math.min(fx.cap, 1, Math.max(0, Number.isFinite(spec.strength) ? spec.strength : 1));
+      const speed = Number.isFinite(spec.speed) && spec.speed > 0 ? spec.speed : named ? fx.speed : P.speed;
+      const band = named ? fx.band : P.band;
+      const fade = named ? fx.fade : P.fade;
+      const only = spec.only ?? null;
+      const turn = Number.isFinite(spec.turn) ? spec.turn : 0;
+      const wv = { id: ++serial, x, y, strength, speed, band, fade, effect: fx.key, from: fx.from, only, turn, kind: spec.kind ?? 'pulse', source: spec.source ?? null, t0: now(), reached: new Set(), left: new Set() };
+      const detail = { id: wv.id, x, y, strength, kind: wv.kind, source: wv.source, speed, effect: fx.key, from: fx.from, only, sound: !!spec.sound, drag: spec.drag ?? null, reduced: false, t0: wv.t0 };
       stale();
       if (reduced()) {
         detail.reduced = true;
+        // a sound's pop is decoration: under reduced motion it sends nothing at all
+        if (!fx.still) { tell(detail); return detail; }
         const v = viewport();
         const hits = [];
         for (const e of consumers) {
           if (e.id != null && e.id === wv.source) continue;
+          if (!admits(only, e)) continue;
           const R = rectOf(e);
           if (!R || !(R.width > 0) || !(R.height > 0) || !onScreen(R, v, P.margin)) continue;
           const d = nearestPoint(x, y, R);
-          const a = falloff(d, strength, P);
+          const a = falloff(d, strength, wv);
           if (a < P.floor) continue;
           const w = waveFor(wv, e, R, d, farthestCorner(x, y, R), d, wv.t0);
           w.reduced = true;
@@ -310,7 +344,11 @@ export function createRadialPulse(opts = {}) {
         for (const { e, w } of hits) { try { e.still?.(w); } catch { /* ignore */ } }
       } else {
         live.push(wv);
-        if (live.length > P.maxWaves) live.shift();
+        if (live.length > P.maxWaves) {
+          // the oldest machine wave (a sound's pop, a key's step) goes first, so they never push out a visitor's click
+          const k = live.findIndex((q) => q.from !== 'user');
+          live.splice(k >= 0 ? k : 0, 1);
+        }
         schedule();
       }
       tell(detail);

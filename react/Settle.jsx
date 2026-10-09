@@ -16,6 +16,8 @@
 // - Options that are objects or functions are compared by a JSON key, so an inline items={[...]} array does not
 //   re-target every render.
 // - Every Settle has role="img" and an aria-label naming what it settles into (label overrides).
+// - weather (lane SOUNDSHAKE, src/weather.js) is a hook like beforeStep: weather(info) -> { heat, lean, pull, rate,
+//   soften, streak } once a frame, read through a ref.
 // - beforeStep, afterStep and onStats are read through refs, so a page can pass fresh closures every render; whether
 //   a hook is given at all is fixed at mount. onHandle(handle) hands the live settle() handle to the page (and null on
 //   unmount), for show(), seek(), advance(), the field and its traces.
@@ -32,7 +34,7 @@
 //   every draw, so a page changes the colours through what the function returns, never through a prop change.
 // - THE DRAG BOX (src/dragbox.js): drag turns a press into click-or-drag (a click fires on release); onDrag(e) hears
 //   { phase: 'armed' | 'move' | 'drop' | 'cancel', box, fadeMs, still, marks }, read through a ref like the hooks, so
-//   the page draws the rectangle itself (the hero: sites/settle-site/src/HeroDrag.jsx).
+//   the page draws the rectangle itself (the hero: SETTLE/settle-site/src/HeroDrag.jsx).
 // </claudes_code_comments>
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -43,7 +45,7 @@ const OPTION_KEYS = [
   'fps', 'sweeps', 'poke', 'background', 'motion', 'soften', 'statsEvery', 'traces', 'echoes', 'echoDecay', 'echoColour',
   'heldColour', 'trail', 'pulses', 'sparks', 'pokeRadius', 'pokeValue', 'maxPower', 'comboMs', 'offset', 'still', 'stillT',
   'rest', 'restAfter', 'reducedFrames', 'stillFrames', 'fit', 'flashColour', 'flashDecay', 'perfLabel', 'renderer', 'quality', 'glDebug', 'trueTime',
-  'audio', 'global', 'globalId', 'drag', 'palette', 'paint', 'level',
+  'audio', 'global', 'globalId', 'drag', 'palette', 'paint', 'level', 'rings', 'radial',
 ];
 
 const keyOf = (v) => JSON.stringify(v, (k, x) => (typeof x === 'function' ? x.toString() : x));
@@ -58,7 +60,7 @@ export function useSettle(opts) {
   const onStats = useRef(opts.onStats);
   onStats.current = opts.onStats;
   const hooks = useRef({});
-  hooks.current = { before: opts.beforeStep, after: opts.afterStep, handle: opts.onHandle, drag: opts.onDrag };
+  hooks.current = { before: opts.beforeStep, after: opts.afterStep, handle: opts.onHandle, drag: opts.onDrag, weather: opts.weather };
   const morphRef = useRef(opts.morph);
   morphRef.current = opts.morph;
 
@@ -71,6 +73,7 @@ export function useSettle(opts) {
       beforeStep: opts.beforeStep ? (F, i) => hooks.current.before?.(F, i) : undefined,
       afterStep: opts.afterStep ? (F, i) => hooks.current.after?.(F, i) : undefined,
       onDrag: opts.onDrag ? (e) => hooks.current.drag?.(e) : undefined,
+      weather: opts.weather ? (i) => hooks.current.weather?.(i) : undefined,
     });
     hooks.current.handle?.(handle.current);
     return () => {

@@ -4,7 +4,7 @@
 // ** Function List **
 // useRadialPulse(ref, respond, opts) - the element behind ref joins the page's bus while mounted; respond is a
 //                                      function (called every frame the front crosses the element) or an object
-//                                      { respond, arrive, leave, still }; opts: { id, rect, enabled }
+//                                      { respond, arrive, leave, still }; opts: { id, rect, enabled, everyWave }
 //
 // ** Technical Review **
 // - Every <Settle> already joins the bus through settle() (mount.js, by way of global.js). useRadialPulse is for
@@ -14,6 +14,8 @@
 //   is renewed only when the element, the id or the rect function changes, and unmount lets it go.
 // - opts.rect may be a function returning a page-pixel rectangle, or the string 'viewport' for a thing that fills the
 //   window (a fixed background, a page-wide sound), in which case ref may be null.
+// - opts.everyWave (lane FOOTERRADIAL): the thing also hears waves confined to another consumer (only: 'hero'), as
+//   the footer's echo does.
 // </claudes_code_comments>
 
 import { useEffect, useRef } from 'react';
@@ -23,7 +25,7 @@ export function useRadialPulse(ref, respond, opts = {}) {
   const handlers = useRef(respond);
   handlers.current = respond;
   const reg = useRef({ el: null, off: null });
-  const { id = null, rect = null, enabled = true } = opts;
+  const { id = null, rect = null, enabled = true, everyWave = false } = opts;
   useEffect(() => {
     const el = ref?.current ?? null;
     const r = reg.current;
@@ -39,7 +41,7 @@ export function useRadialPulse(ref, respond, opts = {}) {
       if (typeof h === 'function') { if (name === 'respond' || name === 'still') h(w); return; }
       h?.[name]?.(w);
     };
-    const consumer = { id, el: rect ? undefined : el, rect: rect ?? undefined, respond: call('respond'), arrive: call('arrive'), leave: call('leave'), still: call('still') };
+    const consumer = { id, everyWave, el: rect ? undefined : el, rect: rect ?? undefined, respond: call('respond'), arrive: call('arrive'), leave: call('leave'), still: call('still') };
     if (!el && !rect) { reg.current = { el: null, off: null }; return; }
     reg.current = { el, off: radialPulse().register(consumer) };
   });

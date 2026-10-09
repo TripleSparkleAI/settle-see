@@ -274,7 +274,7 @@ test('THE CROSS PULL: an escaped twinkle bends toward another box\'s twinkles, c
   assert.deepEqual(none, alone, 'crossPull 0 is the old escape exactly');
 });
 
-test('THE NOISE GATE: a burst sounds noiseBurst noises, then noisePerSecond', () => {
+test('THE NOISE GATE: a burst sounds noiseBurst drops, then noisePerSecond', () => {
   assert.equal(DRAG.noiseBurst, 6);
   assert.equal(DRAG.noisePerSecond, 3);
   const g = createNoiseGate();
@@ -452,7 +452,9 @@ test('settle(drag): a new box nudges the twinkles already alive; overlapping box
   h.destroy();
 });
 
-test('settle(drag): THE NOISE GATE: three quick drags sound six noises; the rest pulse the page silent', async () => {
+test('settle(drag): THE DROP IS ONE EVENT: quick drops sound all four noises each; the gate counts drops, never noises', async () => {
+  // lane HERODRAGFIX: the gate used to take a token per NOISE, so a second drop inside a second lost two of its four
+  // and a third lost all four ("like chance whether it hits"). Now a drop is one token and its answer rides all four.
   const P = globalSettle();
   const heard = [];
   const off = P.onRipple((d) => heard.push(d));
@@ -461,9 +463,54 @@ test('settle(drag): THE NOISE GATE: three quick drags sound six noises; the rest
   await new Promise((r) => setTimeout(r, 4 * DRAG.soundGapMs + 40));
   const births = heard.filter((d) => d.scope === 'local' && d.kind === 'drop');
   assert.equal(births.length, 12, 'every birth still ripples');
-  assert.equal(births.filter((d) => d.sound).length, 6, 'six noises, not twelve');
+  assert.equal(births.filter((d) => d.sound).length, 12, 'three quick drops: all twelve noises sound');
+  const ids = [...new Set(births.map((d) => d.drag))];
+  assert.equal(ids.length, 3, 'each birth names its drop');
+  for (const id of ids) {
+    const mine = births.filter((d) => d.drag === id);
+    assert.deepEqual(mine.map((d) => d.part).sort(), [0, 1, 2, 3], 'parts 0 .. 3');
+    assert.equal(new Set(mine.map((d) => d.sound)).size, 1, 'one verdict for the whole drop');
+  }
   h.destroy();
   off();
+});
+
+test('settle(drag): THE NOISE GATE in drops: eight drops at once, the first six sound whole, the last two silent whole', async () => {
+  const P = globalSettle();
+  const heard = [];
+  const off = P.onRipple((d) => heard.push(d));
+  const { h } = mk();
+  for (let k = 0; k < 8; k++) h.dropBox({ x: 10 + k * 8, y: 10, w: 60, h: 50 });
+  await new Promise((r) => setTimeout(r, 4 * DRAG.soundGapMs + 40));
+  const births = heard.filter((d) => d.scope === 'local' && d.kind === 'drop');
+  assert.equal(births.length, 32);
+  const byDrop = new Map();
+  for (const d of births) byDrop.set(d.drag, [...(byDrop.get(d.drag) ?? []), d.sound]);
+  const verdicts = [...byDrop.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => (v.every(Boolean) ? 'all' : v.some(Boolean) ? 'part' : 'none'));
+  assert.deepEqual(verdicts, ['all', 'all', 'all', 'all', 'all', 'all', 'none', 'none'], 'never half a drop');
+  h.destroy();
+  off();
+});
+
+test('settle(drag): THE RELEASE ANYWHERE: a mouse release the window hears completes the box', () => {
+  const ls = {};
+  const had = globalThis.window;
+  globalThis.window = { addEventListener: (t, f) => { ls[t] = f; }, removeEventListener: (t, f) => { if (ls[t] === f) delete ls[t]; } };
+  try {
+    const { c, h, seen } = mk();
+    c.ls.pointerdown(pe(40, 40, 1));
+    assert.equal(typeof ls.pointerup, 'function', 'the window listens while pressed');
+    c.ls.pointermove(pe(200, 160, 20));
+    ls.pointerup(pe(900, 700, 40)); // outside the canvas; the canvas never hears it
+    assert.equal(seen.at(-1).phase, 'drop', 'the box is dropped');
+    assert.equal(ls.pointerup, undefined, 'and the window lets go');
+    c.ls.pointerup(pe(900, 700, 41)); // a late canvas release changes nothing
+    assert.equal(seen.filter((e) => e.phase === 'drop').length, 1, 'one drop, never two');
+    h.destroy();
+  } finally {
+    if (had === undefined) delete globalThis.window;
+    else globalThis.window = had;
+  }
 });
 
 test('dragPulse: through the radial pulse bus when it is there, else a local ripple; always a drop with sound', () => {

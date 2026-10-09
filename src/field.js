@@ -12,6 +12,7 @@
 //                       present m and counts it as worth `keep` frames, so the next frame weighs 1 / (keep + 1) and the
 //                       picture moves on without a jump (keep = n - 1 every frame is a running average of n frames)
 //   .hold(x, y, r, v, strength) - the pointer: switch on (v = +1) every light within r of (x, y), leaving a trail
+//   .holdIndex(i, v, strength) - the same hand on one light by index, no radius walk (THE WEATHER's streak)
 //   .fade(k)          - let the trail fade: hold strength times k each frame
 //   .clamp(lights, v) - SETTLE's `hold`: the listed lights are set to v and left out of every sweep until released
 //   .release()        - free every clamped light
@@ -178,6 +179,13 @@ export function createField({ w, h, target = null, lean = 0.9, pull = 0.3, seed 
           if (strength > 0.5) s[i] = v;
         }
       }
+      holding = 1;
+    },
+    // one light by index (THE WEATHER's streak, lane SOUNDSHAKE): the hand's hold on light i, with no radius walk
+    holdIndex(i, v = 1, strength = 1) {
+      if (i < 0 || i >= n || (clampN && clamped[i]) || !(strength > 0)) return;
+      held[i] = Math.max(held[i], Math.min(1, strength));
+      heldTo[i] = v;
       holding = 1;
     },
     clamp(lights, v = 1) {

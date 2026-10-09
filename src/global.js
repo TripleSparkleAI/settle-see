@@ -25,8 +25,9 @@
 // ** Technical Review **
 // - Every settle() registers itself (mount.js) with its canvas; opt out with the option global: false. The entry's
 //   wave/arrive/pulse hooks are the bus's respond/arrive/still, translated to the shape the mount expects: wave gets
-//   { x, y, r, band, a, kind, id, w, h } in its own CSS pixels with a = the strength at the front now, arrive gets the
-//   same plus d and kick = GLOBAL_DEFAULTS.kick * a, pulse (reduced motion) gets { x, y, w, h, d, a, ms, kind, id }
+//   { x, y, r, band, a, kind, id, w, h, effect, turn } in its own CSS pixels with a = the strength at the front now
+//   (effect: the RADIAL EFFECTS member, radialeffects.js), arrive gets the same plus d and kick = GLOBAL_DEFAULTS.kick
+//   * a (a sound pop: its member's own kick), pulse (reduced motion) gets { x, y, w, h, d, a, ms, kind, id }
 //   with a = the gradient at the settle.
 // - A PAGE ripple is the bus's emit(): a ring at GLOBAL_DEFAULTS.speed (900 px/s) whose strength at radius r is
 //   strength * exp(-r / fade); it ends when that falls under floor or the ring has passed everything. The mount turns
@@ -42,6 +43,7 @@
 // </claudes_code_comments>
 
 import { createRadialPulse, radialPulse, nearestPoint, farthestCorner } from './radialpulse.js';
+import { effectOf } from './radialeffects.js';
 import { masterBeat } from './masterbeat.js';
 
 export { nearestPoint, farthestCorner };
@@ -85,8 +87,9 @@ export function createGlobalSettle(opts = {}) {
         id: entry.id ?? null,
         el: entry.el,
         rect: entry.rect,
-        respond: entry.wave ? (w) => entry.wave({ x: w.x, y: w.y, r: w.r, band: w.band, a: w.front, kind: w.kind, id: w.id, w: w.w, h: w.h }) : undefined,
-        arrive: entry.arrive ? (w) => entry.arrive({ x: w.x, y: w.y, w: w.w, h: w.h, d: w.d, a: w.front, kick: P.kick * w.front, kind: w.kind, id: w.id }) : undefined,
+        respond: entry.wave ? (w) => entry.wave({ x: w.x, y: w.y, r: w.r, band: w.band, a: w.front, kind: w.kind, id: w.id, w: w.w, h: w.h, effect: w.effect, turn: w.turn }) : undefined,
+        // a user's click kicks the temperature by GLOBAL_DEFAULTS.kick; a sound's pop by its own member's kick
+        arrive: entry.arrive ? (w) => entry.arrive({ x: w.x, y: w.y, w: w.w, h: w.h, d: w.d, a: w.front, kick: (w.effect && w.effect !== 'click' ? effectOf(w.effect).kick : P.kick) * w.front, kind: w.kind, id: w.id, effect: w.effect }) : undefined,
         still: entry.pulse ? (w) => entry.pulse({ x: w.x, y: w.y, w: w.w, h: w.h, d: w.d, a: w.a, ms: w.ms ?? P.pulseMs, kind: w.kind, id: w.id }) : undefined,
       });
       let gone = false;
@@ -116,7 +119,9 @@ export function createGlobalSettle(opts = {}) {
         if (!bus.running()) return null;
         id = ++serial;
       }
-      const detail = { id, x, y, strength, kind, scope, source, sound: !!spec.sound, power: spec.power ?? null, reduced };
+      // drag and part (THE DRAG BOX): which drop a birth belongs to and which of its four it is, so a hearing can
+      // treat a drop as one event (settle-hear THE DROP)
+      const detail = { id, x, y, strength, kind, scope, source, sound: !!spec.sound, power: spec.power ?? null, reduced, drag: spec.drag ?? null, part: spec.part ?? null };
       emit(detail);
       return detail;
     },
@@ -154,6 +159,6 @@ export const globalStats = () => globalSettle().stats();
 export function clickPulse(spec = {}) {
   const local = ripple({ ...spec, scope: 'local', sound: spec.sound ?? true });
   if (!local) return null;
-  const page = radialPulse().emit({ x: spec.x, y: spec.y, strength: spec.pageStrength ?? spec.strength, kind: spec.kind ?? 'click', source: spec.source ?? null });
+  const page = radialPulse().emit({ x: spec.x, y: spec.y, strength: spec.pageStrength ?? spec.strength, kind: spec.kind ?? 'click', source: spec.source ?? null, drag: spec.drag ?? null });
   return { local, page };
 }

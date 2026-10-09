@@ -23,6 +23,7 @@ globalThis.OffscreenCanvas = FakeCanvas;
 globalThis.requestAnimationFrame = () => 1;
 
 const { settle, toTarget, correlation, morphFrames, createMorph, MORPH_DEFAULTS, WORD_FONT } = await import('../src/index.js');
+await (await import('../src/index.js')).loadCreditShapes(); // the credits family loads on demand (lane LAUNCHGATES); its shapes are fixtures here
 
 const W = 48;
 const H = 26;

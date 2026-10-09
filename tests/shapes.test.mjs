@@ -2,7 +2,9 @@
 // leans come from a shuffled copy does not (the control).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createField, makeSchedule, toTarget, getShape, shapeNames, defineBits, describe, KANERVA, correlation, shuffled, Paint } from '../src/index.js';
+import { createField, makeSchedule, toTarget, getShape, shapeNames, defineBits, describe, KANERVA, correlation, shuffled, Paint, loadCreditShapes } from '../src/index.js';
+
+await loadCreditShapes(); // the credits family loads on demand (lane LAUNCHGATES); these tests settle its drawings
 
 // the credits page's schedule: hot 16 frames, cool 120 to 0.45, hold 110, reheat 14
 const SCHED = { kind: 'cycle', hot: 3.0, cold: 0.45, heat: 16, cool: 120, hold: 110, reheat: 14 };

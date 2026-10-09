@@ -2,8 +2,8 @@
 //
 // <claudes_code_comments>
 // ** Function List **
-// NOTES                 - each shape's one-line description, the note describe() returns
-// KANERVA               - the six shapes of Kanerva's sparse distributed memory, in their teaching order
+// NOTES / KANERVA       - re-exported from creditnames.js (the notes and Kanerva's teaching order live there, so
+//                         they load without the drawings)
 // CREDIT_SHAPES         - every shape in this file, by name
 //
 // ** Technical Review **
@@ -17,10 +17,16 @@
 // - tests/shapes.test.mjs settles every one at the sizes settle-site draws it: correlation with the shape above 0.85
 //   after one cool-down, and below 0.25 when the leans come from a shuffled copy.
 // - Moved from settle-site's src/engine/creditshapes.js with the drawings unchanged.
+// - THE LAZY SPLIT (lane LAUNCHGATES, 2026-10-09): the package index no longer imports this file; it imports
+//   creditnames.js, which registers the family's names and notes and loads this file on demand. Importing this file
+//   (or 'settle-see/credits') registers every drawing at once, for a caller that needs them synchronously.
 // </claudes_code_comments>
 
 import { Paint, seeded, scatter, curve } from './paint.js';
 import { defineBits } from './shapes.js';
+import { NOTES, KANERVA } from './creditnames.js';
+
+export { NOTES, KANERVA };
 
 const CREDITS = {
   // ── Kanerva's memory ──
@@ -424,36 +430,6 @@ const CREDITS = {
   },
 };
 
-export const NOTES = {
-  hardLocations: 'hard locations: a few thousand addresses chosen at random in a huge space',
-  hammingBall: 'a cue and the Hamming ball of locations it wakes',
-  counters: 'writing: each woken location adds +1 or -1 to its counters',
-  vote: 'reading is a vote: the woken locations vote on each bit',
-  criticalDistance: 'the critical distance: nearer, reading again converges; farther, it wanders off',
-  tesseract: 'the binary hypercube: every corner an address, every edge one bit flipped',
-  isingDomains: 'two Ising domains of aligned spins meeting at a wall',
-  tanhRule: 'the single-flip rule P(yes) = (1 + tanh I) / 2',
-  boltzmannBars: 'Boltzmann weights e^(-E/T) falling over the energy levels',
-  metropolisHop: 'an energy landscape and a proposed hop over the barrier',
-  restoredDisc: 'a picture restored: noise on the left, clean on the right',
-  annealValley: 'a rugged landscape and the deepest valley slow cooling finds',
-  hopfieldNet: 'a Hopfield net: six units, every pair pulled',
-  boltzmannMachine: 'a Boltzmann machine: visible units below, hidden above',
-  pbitCoin: 'a p-bit: a coin with a lean',
-  tapField: 'mean-field leans, each light sized by its average',
-  tannerGraph: 'a Tanner graph: parity checks above, bits below',
-  softmaxRead: 'a softened read: a softmax peaked on the nearest pattern',
-  markovBlanket: 'a Markov blanket: inside, the blanket, the world outside',
-  noisyWell: 'noise as a resource: a jittering path in a smooth well',
-  pbitChip: 'a chip of p-bits: a die with pins and cells',
-  openBook: 'an open book and its lines of prose',
-  vinyl: 'a record, its grooves and its label',
-  railsAerobics: 'an aerobics figure on a pair of rails',
-  dots: 'polka dots',
-  musicMachine: 'a small music-making machine with notes leaving it',
-};
-
-export const KANERVA = ['hardLocations', 'hammingBall', 'counters', 'vote', 'criticalDistance', 'tesseract'];
 
 export const CREDIT_SHAPES = CREDITS;
 

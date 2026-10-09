@@ -38,6 +38,9 @@
 // ** Technical Review **
 // - opts.shape / opts.word / opts.target: one spec (see target.js); opts.items: a list, cycled by the schedule
 //   (one item per period); nothing given settles into the word SETTLE.
+// - LAZY SHAPES (lane LAUNCHGATES, 2026-10-09): an item naming a shape whose drawing loads on demand (the credits
+//   family) gets an unlit target at once and the real one when the drawing arrives, like an image URL; the next
+//   item's drawing is fetched when the current item starts, as a film is.
 // - SMALL FILMS: an item may be { film: 'url/name.json', fps, loop, tween, T, threshold, note } or { frames: [spec,
 //   ...] } (film.js). A film is fetched only when it is the current item or the next one (lazy), its frames are fitted
 //   into the grid, and it plays in TRUE TIME (truetime.js, navigator 2026-10-01): the movie behind keeps its own pace
@@ -189,7 +192,8 @@ import { createField } from './field.js';
 import { createRenderer, isClearBackground } from './render.js';
 import { createGlRenderer } from './glrender.js';
 import { makeSchedule } from './schedule.js';
-import { toTarget, loadTarget, describe } from './target.js';
+import { toTarget, loadTarget, describe, pendingShape } from './target.js';
+import { ensureShape } from './shapes.js';
 import { addTick } from './ticker.js';
 import { createTraces } from './traces.js';
 import { loadFilm, fitBits, changedLights, agreementOn } from './film.js';
@@ -506,12 +510,14 @@ export function settle(canvas, options = {}) {
     const key = `${geom.w}x${geom.h}:${typeof spec === 'string' ? spec : JSON.stringify(spec, (k, v) => (typeof v === 'function' ? v.toString() : k === 'image' && typeof v !== 'string' ? v.src : v))}`;
     if (cache.has(key)) return cache.get(key);
     let t;
-    if (spec && typeof spec.image === 'string') {
+    // an image URL, or a shape of a lazy family whose drawing has not arrived (the credits family, lane LAUNCHGATES):
+    // an unlit field now, the real target as soon as it loads
+    if ((spec && typeof spec.image === 'string') || pendingShape(spec)) {
       t = new Int8Array(geom.w * geom.h).fill(-1);
       loadTarget(spec, geom.w, geom.h).then((real) => {
         cache.set(key, real);
         if (F && F.target === t) F.setTarget(real);
-      });
+      }, () => {});
     } else t = toTarget(spec, geom.w, geom.h);
     cache.set(key, t);
     return t;
@@ -663,9 +669,11 @@ export function settle(canvas, options = {}) {
       owed = null;
       if (isFilm(it)) ensureFilm(it);
       else if (!isLive(it)) F.setTarget(targetFor(it));
-      // load the NEXT film now, so it is ready when its turn comes (and no earlier)
+      // load the NEXT film now, so it is ready when its turn comes (and no earlier); a lazy shape's drawing likewise
       const nx = list[(index + 1) % list.length];
       if (isFilm(nx)) ensureFilm(nx);
+      const lazyNext = pendingShape(nx);
+      if (lazyNext) ensureShape(lazyNext).catch(() => {});
       if (o.still) snap();
     }
     const cur = list[index % list.length];

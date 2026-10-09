@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "SETTLE's seeing library: pictures that settle out of noise, lit in the SETTLE neon code",
+  "license": "MIT",
   "type": "module",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./react": "./react/index.js"
+    "./react": "./react/index.js",
+    "./credits": "./src/creditshapes.js"
   },
   "files": [
     "src",

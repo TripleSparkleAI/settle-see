@@ -28,6 +28,7 @@ const tick = (now) => { const f = frames; frames = []; f.forEach((fn) => fn(now)
 globalThis.matchMedia = () => ({ matches: false });
 
 const { settle, toTarget, OWED_MAX_FRAMES } = await import('../src/index.js');
+await (await import('../src/index.js')).loadCreditShapes(); // the credits family loads on demand (lane LAUNCHGATES); its shapes are fixtures here
 
 const W = 64;
 const H = 24;

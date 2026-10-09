@@ -4,10 +4,13 @@
 // ** Function List **
 // settle(canvas, opts)                        - mount.js: a live settling picture on a canvas, in one call
 // createField / createRenderer / makeSchedule - the three parts settle() is built from, for custom loops
-// toTarget / loadTarget / describe            - what to settle into
+// toTarget / loadTarget / describe / pendingShape - what to settle into
 // defineShape / defineBits / getShape / shapeNames - the shape registry (defineBits: shapes with no canvas)
+// defineLazy / isPending / ensureShape        - a shape family whose drawings load on demand
 // Paint / seeded / scatter / curve            - paint.js: draw +1 / -1 targets in plain JavaScript
-// KANERVA / CREDIT_SHAPES / CREDIT_NOTES      - creditshapes.js: Kanerva's memory and the credits' characters
+// KANERVA / CREDIT_NAMES / CREDIT_NOTES / loadCreditShapes - creditnames.js: the credits family's names and notes
+//                                             at once; its drawings (creditshapes.js, CREDIT_SHAPES) load on demand,
+//                                             or at once through the 'settle-see/credits' export
 // brainScene / BRAIN_VIEWS / CORTEX_LAYERS / CEREBELLUM_LAYERS - brainshapes.js: the cortex6, cerebellum and
 //                                             brainbands shapes, their views, spike paths and layer labels
 // BURSTS / createBurstDeck / createBurstPlayer - bursts.js: 25 dramatic disturbances of a live field, dealt in a
@@ -67,10 +70,10 @@ export { createTrueTime, replayFrames, TRUE_TIME_DEFAULTS } from './truetime.js'
 export { isLive, liveFrame, LIVE_DEFAULTS, LIVE_FRAMES } from './live.js';
 export { createMorph, morphFrames, MORPH_DEFAULTS } from './morph.js';
 export { makeSchedule } from './schedule.js';
-export { toTarget, loadTarget, describe, makeCanvas, FONT as WORD_FONT } from './target.js';
-export { defineShape, defineBits, getShape, shapeNames, SHAPES, wrapLines } from './shapes.js';
+export { toTarget, loadTarget, describe, pendingShape, makeCanvas, FONT as WORD_FONT } from './target.js';
+export { defineShape, defineBits, defineLazy, isPending, ensureShape, getShape, shapeNames, SHAPES, wrapLines } from './shapes.js';
 export { Paint, seeded, scatter, curve } from './paint.js';
-export { KANERVA, CREDIT_SHAPES, NOTES as CREDIT_NOTES } from './creditshapes.js';
+export { KANERVA, CREDIT_NAMES, NOTES as CREDIT_NOTES, loadCreditShapes } from './creditnames.js'; // the drawings load on demand (lane LAUNCHGATES)
 export { brainScene, rideScene, clampRide, rideTiers, RIDE_START, RIDE_LIMITS, RIDE_UP, RIDE_FAR, RIDE_FAR_END, BRAIN_VIEWS, CORTEX_LAYERS, CEREBELLUM_LAYERS, BAND_SPLIT } from './brainshapes.js';
 export { BURSTS, burstDeckOrder, createBurstDeck, createBurstPlayer, burstEnv } from './bursts.js';
 export { correlation, shuffled } from './measure.js';

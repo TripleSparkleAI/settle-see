@@ -26,6 +26,7 @@ globalThis.OffscreenCanvas = FakeCanvas;
 globalThis.requestAnimationFrame = () => 1;
 
 const { CRACKLE_LIMITS, crackleOf, createRim, crackleRng, crackleFrame, createField, weatherOf, WEATHER_NEUTRAL, settle } = await import('../src/index.js');
+await (await import('../src/index.js')).loadCreditShapes(); // the credits family loads on demand (lane LAUNCHGATES); its shapes are fixtures here
 
 // a 12 x 8 target with a lit 6 x 4 block at (3..8, 2..5): its rim is the block's border, its body the 4 x 2 inside
 const W = 12;

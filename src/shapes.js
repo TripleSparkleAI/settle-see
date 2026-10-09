@@ -5,13 +5,16 @@
 // defineShape(name, draw, note)  - add a shape: draw(c, w, h, u) paints white on black; u is one line width
 // defineBits(name, bits, note, family) - add a shape painted without a canvas: bits(w, h, spec) -> Int8Array of +1 / -1
 // getShape(name) / shapeNames(family) - look one up / list them (all, or one family: physics, plain, credits)
+// defineLazy(names, notes, family, load) - register a family whose drawings load on demand (names and notes at once)
+// isPending(name) / ensureShape(name) - is a lazy shape's drawing still to come / load it, then return the shape
 // wrapLines(c, text, width, max)  - greedy word wrap by measured width, at most `max` lines (the last one carries the rest)
 // landscapeE(x) / landscapeGeometry() - the energy landscape's curve and its valleys (for the shape and its test)
 // SHAPES                         - the canvas built-ins (physics and plain), by name:
 //   physics: purkinje, landscape, tanh, spins, boltzmann, hopfield, sdm, hypercube (the internal shapes of SETTLE's
 //            own physics, first drawn for the home page's room; landscape is painted without a canvas, paint.js)
 //   plain:   circle, ring, heart, star, spiral, wave, cross, diamond, moon, eye (quick shapes to settle into)
-//   credits: the shapes of the people SETTLE rests on, Kanerva's memory first (creditshapes.js, painted by paint.js)
+//   credits: the shapes of the people SETTLE rests on, Kanerva's memory first (creditshapes.js, painted by paint.js);
+//            a LAZY family: creditnames.js registers its names and notes, the drawings load on demand
 //   eightball (plain family): a Magic 8 Ball; with { text } its window shows the die's triangle and the answer
 //            (wrapLines does the wrapping, at most three lines)
 //
@@ -46,6 +49,22 @@ export function defineBits(name, bits, note = '', fam = 'custom') {
   return registry.get(name);
 }
 export const getShape = (name) => registry.get(name);
+// THE LAZY FAMILIES (lane LAUNCHGATES, 2026-10-09): a family whose drawings load on demand. Its names and notes are
+// registered at once, so shapeNames() and describe() answer for them; each entry carries `load`, a function that
+// imports the drawings (which register themselves with defineBits and replace the entry) and resolves when done.
+export function defineLazy(names, notes, fam, load) {
+  let pending = null;
+  const once = () => (pending ??= Promise.resolve().then(load).catch((e) => { pending = null; throw e; }));
+  for (const name of names) if (!registry.get(name)?.bits && !registry.get(name)?.draw) registry.set(name, { name, note: notes[name] || '', family: fam, load: once });
+}
+// true while a lazy shape's drawing has not arrived
+export const isPending = (name) => typeof name === 'string' && !!registry.get(name)?.load;
+// the shape, its drawing loaded first when it belongs to a lazy family; undefined for an unknown name
+export async function ensureShape(name) {
+  const s = registry.get(name);
+  if (s?.load) await s.load();
+  return registry.get(name);
+}
 export const shapeNames = (fam) => [...registry.values()].filter((s) => !fam || s.family === fam).map((s) => s.name);
 
 const path = (c, pts, close = false) => {

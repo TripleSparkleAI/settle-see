@@ -32,6 +32,7 @@ const {
   FORTY_CRACKLE, FORTY_CRACKLE_LIMITS, FORTY_SCAN_PATTERNS, FORTY_SCAN_COVER, fortyCrackleOf, createFortyCrackle,
   fortyLitCycle, scanParams, scanAt, createField, createFortyHz, fortyHz, settle, fortyScanReady, fortyScanState,
 } = await import('../src/index.js');
+await (await import('../src/index.js')).loadCreditShapes(); // the credits family loads on demand (lane LAUNCHGATES); its shapes are fixtures here
 
 // a deterministic generator for the pure pattern tests
 const lcg = (seed = 7) => {

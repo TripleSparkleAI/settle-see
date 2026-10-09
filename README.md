@@ -23,8 +23,8 @@ Every picture on the SETTLE site is drawn by it: the hero, the footer, the heade
 npm install github:triplesparkle/settle-see
 ```
 
-That installs it from its repository, `github.com/triplesparkle/settle-see`. The repository is private for now, so
-the install needs access until it is made public. Nothing is on the npm registry. To run its tests, clone it:
+That installs it from its public repository, `github.com/triplesparkle/settle-see`. Nothing is on the npm registry.
+To run its tests, clone it:
 
 ```sh
 git clone https://github.com/triplesparkle/settle-see
@@ -196,7 +196,7 @@ one say everything else.
   true time).
 - **Access:** every `<Settle>` is an image with a name a screen reader reads. Under reduced motion a picture is drawn
   once, still, and a film shows one frame.
-- **Its state, plainly:** version 0.1.0, private, no licence chosen yet, nothing published to the npm registry. It
+- **Its state, plainly:** version 0.1.0, MIT licence (`LICENSE`), nothing published to the npm registry. It
   runs in any browser with a 2D canvas; its pure half (the field, the shapes painted without a canvas, the deck, the
   clocks) runs in node, which is how its tests run.
 
@@ -238,7 +238,11 @@ Shapes come in three families (`shapeNames('physics')` and so on):
 - credits: Kanerva's memory, `hardLocations hammingBall counters vote criticalDistance tesseract` (the list
   `KANERVA`), then the characters of the people SETTLE rests on: `isingDomains tanhRule boltzmannBars metropolisHop
   restoredDisc annealValley hopfieldNet boltzmannMachine pbitCoin tapField tannerGraph softmaxRead markovBlanket
-  noisyWell pbitChip openBook vinyl railsAerobics dots musicMachine`
+  noisyWell pbitChip openBook vinyl railsAerobics dots musicMachine`. The credits family LOADS ON DEMAND: the index
+  knows the names and notes (`CREDIT_NAMES`, `CREDIT_NOTES`), and the drawings (about 19 kB of source) arrive the
+  first time one is needed. `settle()` handles that itself (an unlit field, then the shape); `loadTarget` and
+  `ensureShape(name)` wait for it; `toTarget` refuses a shape whose drawing has not arrived. To have them at once, call
+  `await loadCreditShapes()` or import `'settle-see/credits'`.
 
 Add your own with `defineShape(name, (c, w, h, u) => { ... }, note)` (a canvas drawing) or
 `defineBits(name, (w, h) => Int8Array, note)` (painted in plain JavaScript with `Paint`: discs, rings, segments,
@@ -473,7 +477,7 @@ while you were away" note. settle-hear listens for the same event and suspends i
 with the pictures. There is exactly one implementation; a page adds no idle timer of its own.
 
 **Off screen.** Each settle watches its canvas with an IntersectionObserver and does no frame work while it is off
-screen. When one callback carries several entries for the canvas, the LAST decides (`seenNow`, lane DJVISUAL): a
+screen. When one callback carries several entries for the canvas, the LAST decides (`seenNow`): a
 canvas inside a panel that opens goes from clipped to shown inside one frame, and reading the first entry left it
 paused as hidden for good.
 
@@ -519,7 +523,7 @@ picture. Under reduced motion, or for a film item, it is a cut. In React, `<Sett
 THE OWED LIGHTS: the lights a morph changes are owed, and when the movie ends every light that still disagrees with
 the new target joins them; a settle with `rest` does not rest until each owed light agrees, or `OWED_MAX_FRAMES` (120)
 frames pass. The movie starts from what is lit rather than from the target the field was heading for, so a morph
-begun while another was still running watches the lights lit from the old words too, and the rest rule can no longer
+begun while another was still under way watches the lights lit from the old words too, and the rest rule can no longer
 freeze them lit (`morphowed.test.mjs`). `stats().owed` counts the owed lights; `handle.resting` says whether the rest
 rule holds the field.
 The word font (`WORD_FONT`) lists Hiragino Sans, Noto Sans JP and Yu Gothic after the Latin faces, so a Japanese
@@ -756,7 +760,7 @@ settle(canvas, { audio: true, globalId: 'hero', drag: true, onDrag: (e) => draw(
   ring of every box sums in the one interference scratch. Past four boxes each twinkle rings less often (every
   `pulseEvery x boxes / 4` frames), so ten boxes cost about what four did.
 - **THE NOISE GATE** (`createNoiseGate`): a burst of drags sounds at most `DRAG.noiseBurst` (6) DROPS, then
-  `DRAG.noisePerSecond` (3) drops a second. A drop is ONE token (lane HERODRAGFIX): the gate is asked once at the
+  `DRAG.noisePerSecond` (3) drops a second. A drop is ONE token: the gate is asked once at the
   release and its answer rides all four births, which carry `drag` (the drop's id) and `part` (0 to 3) in the ripple
   detail, so a hearing can play the drop as one event. A drop over the limit still pulses the page, with
   `sound: false`. A birth the bus refuses is told on the window event `settle:dragsound` (`tellDropSound`). While a
@@ -811,7 +815,7 @@ h.setMode('still');    // the low CPU mode: settled once out of sight, drawn onc
 
 ## Tests
 
-`npm test` runs 288 tests in 28 files under `tests/` with `node --test`, using stand-in canvases (node has none).
+`npm test` runs 298 tests in 29 files under `tests/` with `node --test`, using stand-in canvases (node has none).
 Each file opens with a comment saying what it proves. In brief:
 
 | file | what it checks |
@@ -819,12 +823,13 @@ Each file opens with a comment saying what it proves. In brief:
 | `field.test.mjs` | the checkerboard sweep against the exact p-bit rate and exact two-light enumeration; a cold settle against a no-lean control; clamping and per-light leans |
 | `mount.test.mjs` | `settle()` on a stand-in canvas: still pictures, `show()`, resting, the step hooks, a programmed schedule, `offset`, reduced motion, `fit`, `soften: 'mean'`, the transparent plate |
 | `shapes.test.mjs`, `brain.test.mjs`, `eightball.test.mjs` | every credits shape settles into itself at every size the site draws it (correlation above 0.85) while a shuffled-target control stays below 0.25; each brain view settles and its control does not; the eight ball and its word wrap |
-| `render.test.mjs` | the colour fill: the fast and full loops give the same bytes |
+| `creditlazy.test.mjs` | the credits family loads on demand: the index reaches its names and never its drawings, a pending shape is described by its note and refused by `toTarget` by name, `settle()` starts unlit and takes the drawing when it arrives, and every loaded drawing matches the eager module |
+| `render.test.mjs`, `seennow.test.mjs` | the colour fill: the fast and full loops give the same bytes; a settle reads the last entry of its visibility batch, so a canvas shown inside one frame runs |
 | `ticker.test.mjs`, `truetime.test.mjs`, `morph.test.mjs`, `morphowed.test.mjs`, `film.test.mjs`, `live.test.mjs` | the halt rule; TRUE TIME on fast and slow fronts with a falling-behind control; the morph movie; THE OWED LIGHTS (a morph from the lit picture, no rest while a changed light disagrees); the film format and the TRACES round trip; live items |
 | `gamma.test.mjs`, `fortyhz.test.mjs`, `masterbeat.test.mjs` | the 40 Hz wave and THE RATE RULE; the one page gate; the master grid, and the light on fake 60, 90, 120 and 144 Hz displays and a jittery 60, with negative controls |
 | `global.test.mjs`, `radialpulse.test.mjs`, `radialeffects.test.mjs`, `keyeffects.test.mjs`, `gentlerings.test.mjs` | the registry and the ripple; the bus's delay, falloff, direction, order and costs; the effect family and THE WEATHER; the fifty key members; the gentle rings |
 | `first.test.mjs` | `examples/first.mjs` prints exactly its recorded output, `examples/first.out`, with a seed control |
-| `crackle.test.mjs`, `bursts.test.mjs`, `deck.test.mjs`, `dragbox.test.mjs`, `scenefield.test.mjs` | the edge crackle leaves the physics untouched; the 25 bursts and their deck; THE DECK RULE; the drag box; the scene settle |
+| `crackle.test.mjs`, `fortycrackle.test.mjs`, `bursts.test.mjs`, `deck.test.mjs`, `dragbox.test.mjs`, `scenefield.test.mjs` | the edge crackle leaves the physics untouched; the 40 Hz scanlines brighten only lit lights on lit phases and never move the physics; the 25 bursts and their deck; THE DECK RULE; the drag box; the scene settle |
 
 One test in `global.test.mjs` ("a page ripple passing through a settle leans its lights on the wavefront and kicks
 its temperature") drives the registry with `performance.now()` offsets, so it is timing-dependent: on 2026-10-05 it failed in two full
@@ -832,13 +837,23 @@ runs and in one of two runs of the file alone. It is a known flaky test, not a k
 
 ## Where the SETTLE site uses it
 
-`SETTLE/settle-site` imports settle-see by name in about 60 source files. `<Settle>` draws the home hero
-(`InfinityRoom.jsx`, with the drag box, the weather and TRACES echoes), the footer's room and its bursts
-(`chrome.jsx`), the header logo (`LogoSettle.jsx`, `'map'` colour on a transparent plate), the home coin field and
-the horse count (`how/live.jsx`, per-light leans and `soften: 'mean'`), RELAX's class (`pages/Relax.jsx`, a
-programmed schedule with `clamp` for HOLD), the memory pages, every credit (`pages/CreditSettle.jsx`, the credits
-family with `fit`), and the Learning page's digits (`pages/learnsettle/DigitSettle.jsx`). The page backgrounds
-(`backdrop/Backdrop.jsx`) and the who-you-are doors (`whodoors/WhoDoors.jsx`) use `createSceneSettle`. Every one
-shares the one ticker, the one 40 Hz gate and the one radial pulse bus.
+The SETTLE site draws with settle-see on every page: the header logo, the footer's room and its bursts, and the
+page backgrounds are all settles. Every use shares the one ticker, the one 40 Hz gate and the one radial pulse bus.
+These pages lean on it most:
+
+| page | what settle-see draws there |
+|---|---|
+| the home page | the hero, with the drag box, the weather and the TRACES echoes |
+| `#/settlesee` | this package's own page: the showcase, the playground, every component and option |
+| `#/what` | the coin field and the small live pictures, on the shared ticker |
+| `#/who-you-are` | the three doors, each a scene settle (`createSceneSettle`) |
+| `#/relax` | the cool-down class: a programmed schedule with `clamp` for HOLD, and its correlation control |
+| `#/credits` | every credit, settled from the credits family with `fit` |
+| `#/settle-tour` | the digits a settling machine learns |
+| `#/sdmmemory` and `#/sdmexplore` | the memory pictures |
+| `#/six-layer-feedback` | the cortex and cerebellum layers (`CORTEX_LAYERS`, `CEREBELLUM_LAYERS`) |
+| `#/paper` | the top panel, settling into the words lime and coconut |
+| `#/film` | the 40 Hz light on the film player |
+| `#/puzzles` | the shared ticker's state, so a solver stops while the ticker is held |
 
 > Index verified 2026-10-08 (this README is the folder's only doc; `examples/first.mjs` is its first program)

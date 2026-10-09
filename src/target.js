@@ -4,7 +4,8 @@
 // ** Function List **
 // makeCanvas(w, h)                 - an OffscreenCanvas, or a DOM canvas where OffscreenCanvas is missing
 // toTarget(spec, w, h, opts)       - a spec -> Int8Array(w * h) of +1 / -1 (synchronous)
-// loadTarget(spec, w, h, opts)     - the same, but waits for an image spec given as a URL
+// loadTarget(spec, w, h, opts)     - the same, but waits for an image spec given as a URL or a lazy shape's drawing
+// pendingShape(spec)               - the name of a lazy shape the spec needs whose drawing has not arrived, else null
 // describe(spec)                   - a short human name for a spec ("the word SETTLE", "a heart")
 //
 // ** Technical Review **
@@ -15,11 +16,13 @@
 // - Everything is painted white on black into a w x h canvas and thresholded (opts.threshold, default 110 of 255).
 //   opts.invert swaps lit and unlit. Images fit inside the grid ("contain") and are read by luminance.
 // - u = max(1, h / 90) is the line width handed to shape drawings (see shapes.js).
+// - A shape of a LAZY family (shapes.js defineLazy; the credits family) is known by name before its drawing loads:
+//   toTarget refuses it by name until then (never a silent word), loadTarget waits for it (lane LAUNCHGATES).
 // - FONT carries Japanese, Simplified Chinese and Devanagari faces after the Latin ones (the site draws its hero
 //   words in Japanese, Chinese and Hindi too; lane MORELANGS, 2026-10-02).
 // </claudes_code_comments>
 
-import { getShape } from './shapes.js';
+import { getShape, isPending, ensureShape } from './shapes.js';
 
 // the word font: Latin faces first, then the Japanese system faces (macOS Hiragino, Noto Sans JP / CJK on Linux and
 // Android, Yu Gothic and Meiryo on Windows), then the Simplified Chinese faces (PingFang SC, Noto Sans SC, Microsoft
@@ -103,6 +106,7 @@ export function toTarget(spec, w, h, opts = {}) {
   else if (spec.shape) {
     const s = getShape(spec.shape);
     if (!s) throw new Error(`settle-see: no shape named "${spec.shape}"`);
+    if (s.load) throw new Error(`settle-see: the shape "${spec.shape}" loads on demand; await loadTarget() or ensureShape("${spec.shape}") first`);
     if (s.bits) {
       const t = Int8Array.from(s.bits(w, h, spec));
       if (o.invert) for (let i = 0; i < t.length; i++) t[i] = -t[i];
@@ -116,7 +120,14 @@ export function toTarget(spec, w, h, opts = {}) {
   return threshold(data, w, h, o);
 }
 
+export function pendingShape(spec) {
+  const name = typeof spec === 'string' ? spec : spec && !spec.bits && spec.word == null ? spec.shape : null;
+  return isPending(name) ? name : null;
+}
+
 export async function loadTarget(spec, w, h, opts = {}) {
+  const lazy = pendingShape(spec);
+  if (lazy) await ensureShape(lazy);
   if (spec && typeof spec.image === 'string') {
     const img = new Image();
     img.decoding = 'async';

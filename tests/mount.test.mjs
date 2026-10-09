@@ -27,6 +27,7 @@ globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.leng
 const tick = (now) => { const f = frames; frames = []; f.forEach((fn) => fn(now)); };
 
 const { settle, toTarget, correlation } = await import('../src/index.js');
+await (await import('../src/index.js')).loadCreditShapes(); // the credits family loads on demand (lane LAUNCHGATES); its shapes are fixtures here
 
 test('still: the lights start as the target, and show() snaps a new one in', () => {
   const h = settle(new FakeCanvas(), { shape: 'hammingBall', still: true, res: [48, 26], motion: 'always' });

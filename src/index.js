@@ -33,6 +33,9 @@
 // RADIAL_EFFECTS / KEY_EFFECTS / effectOf / effectHolds - radialeffects.js: THE RADIAL EFFECTS, the bus's named family
 //                                             of wave styles, and THE KEY SUIT of fifty gentle members (lane HEROKEYS)
 // WEATHER_NEUTRAL / weatherOf             - weather.js: THE WEATHER option, a page's per-frame modulation of the knobs
+// livePaintOf (live.js)                   - THE ITEM'S OWN PAINT: an item's own colour map (lane HERORAIN). RAIN AND
+//                                           WATERFALLS (rain.js, createRain) is its own entry, 'settle-see/rain', so a
+//                                           page that never rains does not carry it
 // CRACKLE_LIMITS / crackleOf / createRim / crackleFrame - crackle.js: THE EDGE CRACKLE, the weather's overbright
 //                                             flares along a target's rim (lane CLEARTEXT)
 // FORTY_CRACKLE / fortyCrackleOf / createFortyCrackle / fortyLitCycle / FORTY_SCAN_PATTERNS / scanParams / scanAt
@@ -57,6 +60,7 @@ export { RADIAL_DEFAULTS, PULSE_EVENT, admits, createRadialPulse, radialPulse, r
 // THE RADIAL EFFECTS (lane SOUNDSHAKE): the named family of wave styles on THE RADIAL PULSE BUS; THE WEATHER option
 export { RADIAL_EFFECTS, EFFECT_KEYS, SOUND_EFFECTS, KEY_EFFECTS, KEY_EFFECT_KEYS, GENTLE, isGentle, effectOf, ringCells, onSpoke, effectHolds } from './radialeffects.js';
 export { WEATHER_NEUTRAL, WEATHER_LIMITS, weatherOf } from './weather.js';
+export { livePaintOf } from './live.js'; // an item's own paint (lane HERORAIN)
 export { CRACKLE_LIMITS, crackleOf, createRim, crackleRng, crackleFrame } from './crackle.js';
 export {
   FORTY_CRACKLE, FORTY_CRACKLE_LIMITS, FORTY_SCAN_PATTERNS, FORTY_SCAN_COVER, fortyCrackleOf, fortyLitCycle,

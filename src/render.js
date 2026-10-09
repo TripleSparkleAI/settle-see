@@ -9,7 +9,8 @@
 // ITEM_LOOK_KEYS / resolveItemLook(item) / withItemLook(look, neonLook) - THE ITEM LOOK (lane HEROHYPER): an item's
 //                              own neonLook (an object, or a function answering one, read every frame) over a look;
 //                              off when look.itemLooks is false; every key present (null = the default)
-// fillMap(F, paint, o, colours, d, k) - the 'map' colour mode's fill: a palette index and a gain per light
+// fillMap(F, paint, o, colours, d, k, over) - the 'map' colour mode's fill: a palette index and a gain per light;
+//                              over { time } adds the held trail and the flashes (an item's own paint, lane HERORAIN)
 // lightAlpha(d)              - in place: each RGBA pixel's alpha becomes its brightest channel, its colour scaled up
 //                              to match, so the pixel composites (premultiplied) as the same light with no plate
 // isClearBackground(bg)      - true for background 'transparent': the settle draws raw lights, no plate
@@ -121,7 +122,7 @@ export function makeColours(o) {
 // shared by the 2D and the WebGL renderers and tested in node. A field with no clamp, hold, echo or flash (the
 // common case) takes a loop with none of their branches; general = true forces the full loop (the tests compare them).
 // the 'map' fill: each light its own palette colour and gain (a page background's full-colour picture)
-export function fillMap(F, paint, o, colours, d, k) {
+export function fillMap(F, paint, o, colours, d, k, over = null) {
   const { m } = F;
   const n = F.n;
   const hue = paint.hue;
@@ -151,9 +152,29 @@ export function fillMap(F, paint, o, colours, d, k) {
       k[p + 2] = cr[2] * hot;
     }
   }
+  // over (an item's own paint, lane HERORAIN): the pointer's held trail in ice and the flashes in the flash colour,
+  // added as fillCells adds them, so the sparkle, the pops and the crackle still show on a painted item
+  const hd = over && F.holding ? F.held : null;
+  const fl = over && F.flashA;
+  if (!hd && !fl) return;
+  const ice = colours.held;
+  const fc = colours.flash;
+  for (let i = 0, p = 0; i < n; i++, p += 4) {
+    const g = hd && hd[i] > 0 ? hd[i] * (0.4 + 0.3 * Math.sin(over.time * 7 - hd[i] * 9)) : 0;
+    const f = fl ? fl[i] : 0;
+    if (g > 0 || f > 0) {
+      for (let c = 0; c < 3; c++) {
+        d[p + c] += ice[c] * g + fc[c] * f;
+        if (k !== null && f > 0) k[p + c] = Math.max(k[p + c], fc[c] * f);
+      }
+    }
+  }
 }
 
 export function fillCells(F, extra, o, colours, d, k, general = false) {
+  // THE ITEM'S OWN PAINT (lane HERORAIN): an item's livePaint brings its own palette (paint.mapColours) and draws in
+  // the map mode whatever the settle's colour mode; the pointer's held trail and the flashes still show over it
+  if (extra.paint?.mapColours) return fillMap(F, extra.paint, o, { ...colours, ...extra.paint.mapColours }, d, k, { time: extra.time || 0 });
   if (o.color === 'map' && extra.paint) return fillMap(F, extra.paint, o, colours, d, k);
   const { m, s } = F;
   const n = F.n;

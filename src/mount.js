@@ -201,7 +201,7 @@ import { createTraces } from './traces.js';
 import { loadFilm, fitBits, changedLights, agreementOn } from './film.js';
 import { createTrueTime } from './truetime.js';
 import { masterBeat } from './masterbeat.js';
-import { isLive, liveFrame, LIVE_DEFAULTS, LIVE_FRAMES } from './live.js';
+import { isLive, liveFrame, livePaintOf, LIVE_DEFAULTS, LIVE_FRAMES } from './live.js';
 import { createMorph } from './morph.js';
 import { effectHolds } from './radialeffects.js';
 import { weatherOf } from './weather.js';
@@ -588,7 +588,10 @@ export function settle(canvas, options = {}) {
     if (!R) return;
     const now = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
     const echo = TR && o.echoes && TR.length > 1 ? TR.echo(o.echoes, o.echoDecay ?? 0.8, now * 5) : null;
-    const paint = o.color === 'map' ? paintOf(now) : null;
+    // THE ITEM'S OWN PAINT (lane HERORAIN): an item with livePaint draws in its own colour map while it shows
+    // (render.js fillCells' mapColours); opts.itemPaints false keeps the page's colours (a 40 Hz light, a visitor's choice)
+    const lp = o.itemPaints === false || index < 0 ? null : livePaintOf(items()[index % items().length], F, now);
+    const paint = lp ? { hue: lp.paint.hue, gain: lp.paint.gain, mapColours: lp.colours } : o.color === 'map' ? paintOf(now) : null;
     if (R.direct) {
       R.draw(F, { echo, time: now, paint }, geom, o.background ?? '#000');
       return;
@@ -760,6 +763,15 @@ export function settle(canvas, options = {}) {
     }
     const info = { frame, T: Tuse, beta: 1 / Tuse, phase, index, filmFrame: shownFrame };
     o.beforeStep?.(F, info);
+    // THE ITEM'S OWN STEP (lane HERORAIN): an item may carry beforeStep(F, info), run each frame it shows, after the
+    // page's; the SETTLE site's rain overlay holds its falling heads this way. A throw is the item's, never the frame's
+    if (typeof cur?.beforeStep === 'function') {
+      try {
+        cur.beforeStep(F, info);
+      } catch {
+        // an item's step that falls over leaves the frame as it was
+      }
+    }
     sparkle();
     pulse();
     swarm();

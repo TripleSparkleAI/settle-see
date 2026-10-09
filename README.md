@@ -274,6 +274,12 @@ change its look in the middle of its slot; the colours are remade only when the 
 turns item looks off, so a page's own colour choice wins. The SETTLE site's hero uses this for its HYPER PINK and
 HYPER BLUE items.
 
+**An item's own paint.** An item may carry `livePaint: { palette, paint(field, timeSec) }`. While it shows, the
+settle draws it in the `'map'` mode with that palette, whatever its own colour mode, so one picture can hold several
+neons at once; the pointer's trail and the flashes still show over it. `itemPaints: false` keeps the page's colours.
+The palette's colours are made once per `livePaint`; a paint of the wrong size, or one that throws, draws the
+settle's own colours. The SETTLE site's rain showcases use it.
+
 `background` is the plate's colour (default `'#000'`). `background: 'transparent'` draws raw lights with no plate:
 an unlit light and the gap between dots have alpha 0, and a lit dot keeps its colour, so the picture sits over
 whatever is behind the canvas (the site's header logo uses it with `glow: 0` and `dim: 0`). Each light's alpha is
@@ -323,6 +329,7 @@ the last K traces as pulsing echoes where the picture has been. The handle's `re
 | `schedule: (frame) => ({ T, phase, index })` | the temperature, a phase name, and which item to settle into |
 | `offset: 120` | start the schedule 120 frames in, so many settles on a page do not pulse in step |
 | `beforeStep(field, info)` / `afterStep(field, info)` | run around every frame's sweeps; `info` is `{ frame, T, beta, phase, index }` |
+| item `beforeStep(field, info)` | an item's own step, run each frame that item shows, after the page's (a throw is ignored) |
 | `field.clamp(lights, v)` / `field.release()` | SETTLE's exact `hold`: clamped lights keep their value through every sweep, drawn in ice |
 | `field.setLeans(Float32Array)` | a real lean per light (a grey picture's leans) in place of `lean * target` |
 | `soften: 'mean'` | a dot's brightness is its plain yes count since `field.resetSoft()` (SETTLE's `ask`), not a running average |
@@ -409,6 +416,19 @@ lights the sample changed (0.8 by default) it takes the sample of that instant. 
 from the old sample to the new one. A function that throws or answers the wrong size keeps the last target, never
 an empty one. `stats().live` is `{ sample, shown, behind, periodMs }`. settle-hear's `spectrumTarget(style)` makes a
 live source from its spectrum. The SETTLE site's hero visualisers (`src/visualisers.js`) are live items.
+
+## Rain and waterfalls (rain.js)
+
+`import { createRain } from 'settle-see/rain'` (its own entry, so a page that never rains does not carry it). A
+stochastic process on a settle's own grid: every column holds a p-bit, drawn once a tick (40 ms) by the tanh rule,
+`P(+1) = (1 + tanh(I / T)) / 2`, and a +1 starts a drop. `kind: 'rain'` is a flat negative field (about 0.7 drops a
+column a second at T 1); `kind: 'waterfall'` adds a Gaussian bump per stream, so its drops crowd the stream's centre,
+its edges spray and its pool breathes mist. A drop has a depth: near drops fall fast, long and bright, far ones slow,
+short and dim. `advance(ms)` runs the ticks a time covers (the same ticks at any frame rate), `render(bits, paint)`
+writes the streaks as a target and a paint (the head brightest, the tail falling off, an afterglow where a streak has
+gone), `heads(cb)` and `cells(cb)` walk them for a page that holds lights instead, and `setT(T)` and
+`setStreams(streams)` anneal and move it. The SETTLE site's hero uses it for ten showcases (as live items with their
+own paint) and for a faint overlay on other pictures (as holds, through an item's `beforeStep`).
 
 ## The 40 Hz light (fortyhz.js, gamma.js)
 
@@ -823,7 +843,7 @@ h.setMode('still');    // the low CPU mode: settled once out of sight, drawn onc
 
 ## Tests
 
-`npm test` runs 305 tests in 30 files under `tests/` with `node --test`, using stand-in canvases (node has none).
+`npm test` runs 314 tests in 31 files under `tests/` with `node --test`, using stand-in canvases (node has none).
 Each file opens with a comment saying what it proves. In brief:
 
 | file | what it checks |
@@ -832,6 +852,7 @@ Each file opens with a comment saying what it proves. In brief:
 | `mount.test.mjs` | `settle()` on a stand-in canvas: still pictures, `show()`, resting, the step hooks, a programmed schedule, `offset`, reduced motion, `fit`, `soften: 'mean'`, the transparent plate |
 | `shapes.test.mjs`, `brain.test.mjs`, `eightball.test.mjs` | every credits shape settles into itself at every size the site draws it (correlation above 0.85) while a shuffled-target control stays below 0.25; each brain view settles and its control does not; the eight ball and its word wrap |
 | `creditlazy.test.mjs` | the credits family loads on demand: the index reaches its names and never its drawings, a pending shape is described by its note and refused by `toTarget` by name, `settle()` starts unlit and takes the drawing when it arrives, and every loaded drawing matches the eager module |
+| `rain.test.mjs` | RAIN AND WATERFALLS: the spawn is a column p-bit drawn by the tanh rule, at its own rate and temperature; the same seed and ticks draw the same rain at any frame rate; a waterfall crowds its stream, sprays and breathes mist while rain does not; the paint's head is brightest; an item's own paint draws two neons in one picture with the held trail over it; an item's own step runs each frame it shows |
 | `render.test.mjs`, `seennow.test.mjs` | the colour fill: the fast and full loops give the same bytes; a settle reads the last entry of its visibility batch, so a canvas shown inside one frame runs |
 | `itemlook.test.mjs` | THE ITEM LOOK: an item's `neonLook` lights it in its own colours from its first frame and the next plain item is rose again; a plain item draws byte for byte as before; `itemLooks: false` lets the caller's colours win; a function look switches mid-item, even at rest |
 | `ticker.test.mjs`, `truetime.test.mjs`, `morph.test.mjs`, `morphowed.test.mjs`, `film.test.mjs`, `live.test.mjs` | the halt rule; TRUE TIME on fast and slow fronts with a falling-behind control; the morph movie; THE OWED LIGHTS (a morph from the lit picture, no rest while a changed light disagrees); the film format and the TRACES round trip; live items |

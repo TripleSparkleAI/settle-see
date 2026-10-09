@@ -9,7 +9,8 @@
   "exports": {
     ".": "./src/index.js",
     "./react": "./react/index.js",
-    "./credits": "./src/creditshapes.js"
+    "./credits": "./src/creditshapes.js",
+    "./rain": "./src/rain.js"
   },
   "files": [
     "src",

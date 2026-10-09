@@ -46,6 +46,8 @@ const OPTION_KEYS = [
   'heldColour', 'trail', 'pulses', 'sparks', 'pokeRadius', 'pokeValue', 'maxPower', 'comboMs', 'offset', 'still', 'stillT',
   'rest', 'restAfter', 'reducedFrames', 'stillFrames', 'fit', 'flashColour', 'flashDecay', 'perfLabel', 'renderer', 'quality', 'glDebug', 'trueTime',
   'audio', 'global', 'globalId', 'drag', 'palette', 'paint', 'level', 'rings', 'radial',
+  'itemPaints', // THE ITEM'S OWN PAINT on or off (lane HERORAIN)
+  'itemLooks', // THE ITEM LOOK on or off (lane HEROHYPER): the 40 Hz light turns item looks off
 ];
 
 const keyOf = (v) => JSON.stringify(v, (k, x) => (typeof x === 'function' ? x.toString() : x));

@@ -20,14 +20,14 @@ Every picture on the SETTLE site is drawn by it: the hero, the footer, the heade
 ## Quick start
 
 ```sh
-npm install github:triplesparkle/settle-see
+npm install github:TripleSparkleAI/settle-see
 ```
 
-That installs it from its public repository, `github.com/triplesparkle/settle-see`. Nothing is on the npm registry.
+That installs it from its public repository, `github.com/TripleSparkleAI/settle-see`. Nothing is on the npm registry.
 To run its tests, clone it:
 
 ```sh
-git clone https://github.com/triplesparkle/settle-see
+git clone https://github.com/TripleSparkleAI/settle-see
 cd settle-see
 npm test
 ```

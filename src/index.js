@@ -89,5 +89,5 @@ export { FILM_FORMAT, packBits, unpackBits, packFrames, unpackFrames, fitBits, f
 export { Rng } from './rng.js';
 export { createBag, indexDeck, bagSequence, deckRng, bagRng, freshSeed } from './deck.js'; // THE DECK RULE: every cycle deals like a deck
 export { createGamma, nearestRate, gammaPhase, gammaLevel, clampGamma, darkTime, createDither, canShowHz, measureRefresh, refreshFromIntervals, snapRefresh, pickFlashRate, createFlashClock, DISPLAY_RATES } from './gamma.js';
-export { FORTY_HZ, FORTY_HZ_ATTR, FORTY_HZ_ROOT, FORTY_HZ_SESSION, FORTY_HZ_CSS, createFortyHz, fortyHz, fortyHzRate } from './fortyhz.js';
+export { FORTY_HZ, FORTY_HZ_ATTR, FORTY_HZ_ROOT, FORTY_HZ_SESSION, FORTY_HZ_CSS, createFortyHz, fortyHz, fortyHzRate, tickerHold } from './fortyhz.js';
 export { createMasterBeat, masterBeat, unitMs, MASTER, MASTER_GLOBAL } from './masterbeat.js';

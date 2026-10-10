@@ -21,10 +21,19 @@
 //   .phase                     - the state drawn now: true lit, false dark, null when off
 //   .litCycle                  - how many lit phases have begun since the light went on (0 when off); THE 40 Hz
 //                                CRACKLE (fortycrackle.js) advances its scanlines once per lit phase by it
-//   .info                      - { hz, asked, refresh, nearest, refused, running, shownHz, darkShare, lockMs }
+//   .held                      - is the light held (PAUSE ALL, or the reader away): the mode may still be on; the
+//                                light rests lit
+//   .heldBy                    - why: 'pause' (PAUSE ALL), 'away' (the five-minute idle freeze), or null
+//   .hold(why)                 - the ticker's side of the gate: 'pause', 'away' or true stops the flashing and rests
+//                                every drawing lit; false or null resumes the light as it was (the page gate wires it
+//                                to settle-see's ticker)
+//   .info                      - { hz, asked, refresh, nearest, refused, running, held, heldBy, shownHz, darkShare,
+//                                lockMs }
 //   .step(now)                 - one display frame (the gate's own loop calls it; tests drive it directly)
 //   .restore()                 - turn on again when this tab's session says it was on (and motion is allowed)
-// fortyHz()                    - THE PAGE'S GATE, built on first use with the real document and window
+// fortyHz()                    - THE PAGE'S GATE, built on first use with the real document and window, and held
+//                                by PAUSE ALL and by the idle freeze (settle-see's ticker states 'held' and 'away')
+// tickerHold(state)            - the hold a ticker state asks of the light: 'pause', 'away' or null
 // fortyHzRate(info)            - the rate the light actually shows, as a number for the status chip (0 when not shown)
 //
 // ** Technical Review **
@@ -50,9 +59,23 @@
 //   mode and a fresh visit never starts flashing. Nothing goes in localStorage.
 // - REDUCED MOTION refuses the mode (set(true) returns false and info.refused says why), and a change to reduced motion
 //   while the mode is on turns it off.
+// - PAUSE ALL HOLDS THE LIGHT (lane PAUSELIGHT, navigator 2026-10-10: PAUSE ALL "must also stop the 40 Hz light").
+//   PAUSE ALL is settle-see's ticker held (holdTicker); the page gate listens to it (onTickerState) and calls hold().
+//   While held the gate's frame loop is stopped (no second timer: the one loop simply does not run), the root reads
+//   'lit' so every [data-settle-light] rests LIT (never stuck in the dark half), litCycle stops, and info.held says
+//   so. The mode itself is untouched: on stays on, the session key stays, every off button and Escape still work,
+//   and set(true) under a hold turns the mode on resting lit. Releasing the hold resumes the same clock on the master
+//   beat with the display rate already measured (no second measure, so it flashes again on the next frame); a page
+//   that has not measured yet measures first. The 40 Hz sound needs nothing here: it plays on settle-hear's engine,
+//   which suspends its context while the ticker is held.
+// - THE IDLE FREEZE HOLDS IT TOO (lane PAUSELIGHT, coordinator 2026-10-10): after five minutes with no activity the
+//   ticker goes 'away' and every settle freezes; the light rests lit the same way (heldBy 'away') and resumes with
+//   the pictures on the reader's next move. A hidden tab is not a hold: the browser runs no frames there, and the
+//   tab waking measures the display again (onVisible).
 // </claudes_code_comments>
 
 import { masterBeat } from './masterbeat.js';
+import { onTickerState, tickerHeld, tickerState } from './ticker.js';
 import { createFlashClock, measureRefresh, pickFlashRate } from './gamma.js';
 
 export const FORTY_HZ = Object.freeze({ hz: 40, duty: 0.5, slow: 'nearest' });
@@ -64,6 +87,13 @@ html[${FORTY_HZ_ROOT}='dark'] [${FORTY_HZ_ATTR}]{opacity:0 !important}`;
 
 const STYLE_ID = 'settle-fortyhz-style';
 const REDUCED = '(prefers-reduced-motion: reduce)';
+
+// the hold a ticker state asks of the light: PAUSE ALL ('held') and the idle freeze ('away'); a hidden tab asks none
+export function tickerHold(state) {
+  if (state === 'held') return 'pause';
+  if (state === 'away') return 'away';
+  return null;
+}
 
 export function fortyHzRate(info) {
   if (!info || info.refused || !info.running) return 0;
@@ -77,6 +107,8 @@ export function createFortyHz({
   measure = measureRefresh,
   reduced = () => false,
   onReducedChange = null,
+  held = () => false,
+  onHeldChange = null,
   storage = null,
   origin = null,
   hz = FORTY_HZ.hz,
@@ -86,7 +118,11 @@ export function createFortyHz({
   const listeners = new Set();
   const phaseFns = new Set();
   const lights = new Map(); // element -> name
-  const info = { hz, asked: hz, refresh: 0, nearest: false, refused: null, running: false, shownHz: 0, darkShare: 0, lockMs: 0 };
+  const why = (w) => (w === true ? 'pause' : w ? String(w) : null);
+  let heldBy = null;
+  try { heldBy = why(held()); } catch { heldBy = null; }
+  let holding = !!heldBy;
+  const info = { hz, asked: hz, refresh: 0, nearest: false, refused: null, running: false, held: holding, heldBy, shownHz: 0, darkShare: 0, lockMs: 0 };
   let on = false;
   let phase = null;
   let clock = null;
@@ -129,7 +165,7 @@ export function createFortyHz({
     if (e.key === 'Escape' && on) G.set(false);
   };
   const onVisible = () => {
-    if (on && !doc?.hidden) start(); // the tab woke: the display may have changed, so measure again
+    if (on && !holding && !doc?.hidden) start(); // the tab woke: the display may have changed, so measure again
   };
   const stopLoop = () => {
     if (frame && caf) caf(frame);
@@ -137,35 +173,83 @@ export function createFortyHz({
     clock = null;
   };
   const loop = (now) => {
-    if (!on || !clock) return;
+    if (!on || holding || !clock) return;
     frame = raf ? raf(loop) : 0;
     G.step(now);
   };
+  // run the clock at a measured display rate r: the same clock a measure starts, and the one a released hold resumes
+  function run(r) {
+    info.refresh = r;
+    const pick = pickFlashRate(r, hz, slow);
+    info.refused = pick.refused;
+    info.nearest = pick.nearest;
+    info.hz = pick.refused ? hz : pick.hz;
+    if (pick.refused) {
+      notify();
+      return;
+    }
+    clock = createFlashClock({ hz: pick.hz, duty, refresh: r, origin: org() });
+    info.running = true;
+    t0 = 0;
+    tPrev = 0;
+    flips = 0;
+    darkT = 0;
+    lock = 0;
+    frame = raf ? raf(loop) : 0;
+    notify();
+  }
   function start() {
     stopLoop();
     const mine = ++ticket;
     info.running = false;
+    if (holding) return; // PAUSE ALL or the idle freeze: nothing runs; releasing the hold starts it
     Promise.resolve(measure()).then((r) => {
-      if (!on || mine !== ticket) return;
-      info.refresh = r;
-      const pick = pickFlashRate(r, hz, slow);
-      info.refused = pick.refused;
-      info.nearest = pick.nearest;
-      info.hz = pick.refused ? hz : pick.hz;
-      if (pick.refused) {
-        notify();
-        return;
-      }
-      clock = createFlashClock({ hz: pick.hz, duty, refresh: r, origin: org() });
-      info.running = true;
-      t0 = 0;
-      tPrev = 0;
-      flips = 0;
-      darkT = 0;
-      lock = 0;
-      frame = raf ? raf(loop) : 0;
-      notify();
+      if (!on || holding || mine !== ticket) return;
+      run(r);
     });
+  }
+  // rest every drawing lit, the one write the dark half would otherwise leave behind
+  const restLit = () => {
+    const was = phase;
+    phase = true;
+    writeRoot('lit');
+    if (was === false) tellPhase(true);
+  };
+  function hold(want) {
+    const by = why(want);
+    const v = !!by;
+    if (v === holding) {
+      if (by !== heldBy) { // still held, for another reason now
+        heldBy = by;
+        info.heldBy = by;
+        notify();
+      }
+      return;
+    }
+    holding = v;
+    heldBy = by;
+    info.held = v;
+    info.heldBy = by;
+    if (!on) {
+      notify();
+      return;
+    }
+    if (v) {
+      ticket++; // a measure in flight lands on nothing
+      stopLoop();
+      info.running = false;
+      info.shownHz = 0;
+      info.darkShare = 0;
+      restLit();
+      notify();
+      return;
+    }
+    // released: the same clock again on the master beat, with the rate already measured; measure only if none was
+    if (info.refresh > 0 && !info.refused) {
+      stopLoop();
+      ticket++;
+      run(info.refresh);
+    } else start();
   }
   const G = {
     get on() {
@@ -177,6 +261,13 @@ export function createFortyHz({
     get litCycle() {
       return on ? litCycle : 0;
     },
+    get held() {
+      return holding;
+    },
+    get heldBy() {
+      return heldBy;
+    },
+    hold,
     get info() {
       return { ...info };
     },
@@ -249,7 +340,7 @@ export function createFortyHz({
       return [...lights.entries()];
     },
     step(now) {
-      if (!on || !clock) return phase;
+      if (!on || holding || !clock) return phase;
       const { bright, onset, cycle } = clock.step(now);
       if (onset) lock = Math.max(lock, Math.abs(now - (org() + (cycle * 1000) / clock.hz)));
       if (tPrev && phase === false) darkT += (now - tPrev) / 1000;
@@ -287,6 +378,7 @@ export function createFortyHz({
   onReducedChange?.((isReduced) => {
     if (isReduced && on) G.set(false);
   });
+  onHeldChange?.((w) => hold(w));
   return G;
 }
 
@@ -306,6 +398,9 @@ export function fortyHz() {
     caf: typeof cancelAnimationFrame === 'function' ? (id) => cancelAnimationFrame(id) : null,
     reduced: () => !!mq?.matches,
     onReducedChange: (fn) => mq?.addEventListener?.('change', (e) => fn(e.matches)),
+    // PAUSE ALL (settle-see's ticker, holdTicker) and the five-minute idle freeze: the light stops with every settle
+    held: () => (tickerHeld() ? 'pause' : tickerHold(tickerState().state)),
+    onHeldChange: (fn) => onTickerState((d) => fn(tickerHeld() ? 'pause' : tickerHold(d?.state))),
     storage: store,
   });
   if (typeof globalThis !== 'undefined') globalThis.__settleFortyHz = page;

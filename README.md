@@ -444,6 +444,16 @@ picture it draws itself with `useFortyHzLight(ref, name)`. On each flip the gate
 while the root reads dark, so every drawing changes on the same frame. The mode is kept for a reload in the same tab
 (`sessionStorage`) and never starts on a fresh visit. React's `useFortyHz()` gives `{ on, info, lights, set, toggle }`.
 
+**PAUSE ALL holds the light.** The page gate listens to the ticker (`holdTicker`, `onTickerState`). While PAUSE ALL
+holds the page, the gate's own frame loop stops, the root reads `'lit'`, so every drawing rests lit and never sits in
+the dark half, and `info.held` is true. The mode itself does not change: `on` stays on, the session key stays, and
+Escape and every off button still turn it off. Pressing PAUSE ALL again resumes the same clock on the master beat
+with the display rate it already measured. The 40 Hz sound plays on settle-hear's shared engine, which PAUSE ALL
+suspends with every other sound. The five-minute idle freeze (the ticker's `'away'`) holds the light the same way,
+and the reader's next move brings it back with the pictures; `heldBy` says which (`'pause'` or `'away'`, from
+`tickerHold(state)`). A hidden tab is not a hold: the browser draws no frames there. `createFortyHz` takes `held`
+and `onHeldChange` to inject the hold in tests.
+
 **The display's rate is measured** (`measureRefresh`): the 20th-percentile `requestAnimationFrame` interval over
 about a second, snapped to a standard rate within 2% (`snapRefresh`: 59.94 reads as 60), and measured again whenever
 the tab becomes visible. A low percentile reads the display's own period even on a page busy enough to drop frames.
@@ -843,7 +853,7 @@ h.setMode('still');    // the low CPU mode: settled once out of sight, drawn onc
 
 ## Tests
 
-`npm test` runs 314 tests in 31 files under `tests/` with `node --test`, using stand-in canvases (node has none).
+`npm test` runs 324 tests in 32 files under `tests/` with `node --test`, using stand-in canvases (node has none).
 Each file opens with a comment saying what it proves. In brief:
 
 | file | what it checks |
@@ -856,7 +866,7 @@ Each file opens with a comment saying what it proves. In brief:
 | `render.test.mjs`, `seennow.test.mjs` | the colour fill: the fast and full loops give the same bytes; a settle reads the last entry of its visibility batch, so a canvas shown inside one frame runs |
 | `itemlook.test.mjs` | THE ITEM LOOK: an item's `neonLook` lights it in its own colours from its first frame and the next plain item is rose again; a plain item draws byte for byte as before; `itemLooks: false` lets the caller's colours win; a function look switches mid-item, even at rest |
 | `ticker.test.mjs`, `truetime.test.mjs`, `morph.test.mjs`, `morphowed.test.mjs`, `film.test.mjs`, `live.test.mjs` | the halt rule; TRUE TIME on fast and slow fronts with a falling-behind control; the morph movie; THE OWED LIGHTS (a morph from the lit picture, no rest while a changed light disagrees); the film format and the TRACES round trip; live items |
-| `gamma.test.mjs`, `fortyhz.test.mjs`, `masterbeat.test.mjs` | the 40 Hz wave and THE RATE RULE; the one page gate; the master grid, and the light on fake 60, 90, 120 and 144 Hz displays and a jittery 60, with negative controls |
+| `gamma.test.mjs`, `fortyhz.test.mjs`, `masterbeat.test.mjs`, `pauselight.test.mjs` | the 40 Hz wave and THE RATE RULE; the one page gate; the master grid, and the light on fake 60, 90, 120 and 144 Hz displays and a jittery 60, with negative controls; PAUSE ALL and the idle freeze hold the light lit, keep the mode on, and resume the same clock with no second measure, with a control that flashes |
 | `global.test.mjs`, `radialpulse.test.mjs`, `radialeffects.test.mjs`, `keyeffects.test.mjs`, `gentlerings.test.mjs` | the registry and the ripple; the bus's delay, falloff, direction, order and costs; the effect family and THE WEATHER; the fifty key members; the gentle rings |
 | `first.test.mjs` | `examples/first.mjs` prints exactly its recorded output, `examples/first.out`, with a seed control |
 | `crackle.test.mjs`, `fortycrackle.test.mjs`, `bursts.test.mjs`, `deck.test.mjs`, `dragbox.test.mjs`, `scenefield.test.mjs` | the edge crackle leaves the physics untouched; the 40 Hz scanlines brighten only lit lights on lit phases and never move the physics; the 25 bursts and their deck; THE DECK RULE; the drag box; the scene settle |
